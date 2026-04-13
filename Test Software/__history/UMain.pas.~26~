@@ -1,0 +1,1944 @@
+// Created by Matthew Fischer for Simtek Inc.
+unit UMain;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls, ExtCtrls, ComCtrls, Menus, IniFiles, Math,
+  DXClass, DIB, ExtDlgs, IdBaseComponent, IdComponent, IdUDPBase,
+  IdUDPClient, ShellAPI, jpeg;
+
+const
+  InstNum            = '9860';
+  InstRevLevel       = '-';
+  lblAddressWWW      = 'www.simtekinc.com';
+  lblTestSoftwareCap = ': 10-' + InstNum;
+  lblTestSoftwareRev = ':   ' + InstRevLevel;
+  lblWARNINGCaption  = 'CAUTION FOR USE IN' +#$0D#$0A+ 'FLIGHT SIMULATOR ONLY';
+  InstSec            = '10' + InstNum;
+  icTXQue            = 512;
+  icRXQue            = 1024;
+  GENSec             = 'general';
+  InstSecK01         = 'edtIPAddress';
+  InstSecK02         = 'edtClientPort';
+  InstSecK03         = 'cpdCOMBAUDRATE';
+  GenSecK01          = 'TxWinLimit';
+  GenSecK02          = 'RxWinLimit';
+  GenSecK03          = 'cpdDATABITS';
+  GenSecK04          = 'cpdPARITY';
+  GenSecK05          = 'cpdSTOPBITS';
+// Host Command Setn to the Instrument
+  TSCapHeader        = ' Transmit speed = ';
+
+  C0Command          = 'Reset';
+  C0Request          = $F0; // Reset Request
+  C0Requestlength    = 1;
+  C0CapHeader        = C0Command + ' Transmit speed = ';
+  C0Response         = C0Request;
+  C0Responselength   = 0;
+
+//  C1Command          = 'Options';
+//  C1Request          = $91; // Options Change Request
+//  C1Requestlength    = 3;
+//  C1CapHeader        = C1Command + ' Transmit speed = ';
+//  C1Response         = C1Request;
+//  C1Responselength   = 0;
+
+  C2Command          = 'Firmware';
+  C2Request          = $FE; // Firmware information
+  C2Requestlength    = 1;
+  C2CapHeader        = C2Command + ' Transmit speed = ';
+  C2DeviceValDefault = ': 7?-???? Rev ?';
+  C2Response         = C2Request;
+  C2Responselength   = 9;
+
+  C3Command          = 'Control';
+  C3Request          = $F5; // Display Request
+  C3Requestlength    = 9;
+  C3CapHeader        = C3Command + ' Transmit speed = ';
+  C3Response         = C3Request;
+  C3Responselength   = 0;
+
+//  C4Command          = 'Indicator';
+//  C4Request          = $F3; // Indicator/Annunciator Change Request
+//  C4Requestlength    = 2;
+//  C4CapHeader        = C4Command + ' Transmit speed = ';
+//  C4Response         = C4Request;
+//  C4Responselength   = 0;
+//
+//  C5Command          = 'Dimming';
+//  C5Request          = $F4; // Dimming Change Request
+//  C5Requestlength    = 3;
+//  C5CapHeader        = C5Command + ' Transmit speed = ';
+//  C5Response         = C5Request;
+//  C5Responselength   = 0;
+//
+//  C6Command          = 'Status';
+//  C6Request          = $F1; // Input Status Request
+//  C6Requestlength    = 1;
+//  C6CapHeader        = C6Command + ' Transmit speed = ';
+//  C6Response         = C6Request;
+//  C6Responselength   = 5;
+
+
+  // Descriptive labels to use with routines
+  lblDimming1Cap     = 'Panel Dimming Level = ';
+  lblDimming1Hint    = 'Shows Display Brightness Value';
+  lblDimming2Cap     = 'Indicator Dimming Level = ';
+  lblDimming2Hint    = 'Shows Indicator Brightness Value';
+
+  clActive           = clBlue;
+  clInactive         = clWhite;
+  lblBxbxValDefault  = ': unknown';
+
+  masterTop  : integer = 133;
+  masterBot  : integer = 167;
+  ecmTop     : integer = 257;
+  ecmBot     : integer = 295;
+  ircmTop    : integer = 257;
+  ircmBot    : integer = 295;
+  jetTop     : integer = 128;
+  jetbot     : integer = 208;
+
+  mpTop      : integer = 257;
+  mpMid      : integer = 279;
+  mpBot      : integer = 296;
+
+type
+ Tx = record
+   s    : string;                               //
+   ai   : byte;                                 // average update rate index
+   ar   : array[0..255] of double;              // average update rate
+   us   : double;                               // update speed
+   ui   : byte;                                 // update index
+   uc   : integer;                              // update rate count
+end;
+
+type
+  pbyte = ^byte;
+
+
+type
+  TMainForm = class(TDXForm)
+    DXTimer1: TDXTimer;
+    MainMenu1: TMainMenu;
+    StatusBar: TStatusBar;
+    PopupMenu1: TPopupMenu;
+    Cut1: TMenuItem;
+    Copy1: TMenuItem;
+    Paste1: TMenuItem;
+    Delete1: TMenuItem;
+    Selectall1: TMenuItem;
+    pmClearAll: TMenuItem;
+    Print1: TMenuItem;
+    IdUDPClient1: TIdUDPClient;
+    memoTx: TRichEdit;
+    lblTransmitted: TLabel;
+    memoRx: TRichEdit;
+    lblReceived: TLabel;
+    mm01: TMenuItem;
+    mm01s01: TMenuItem;
+    mm02: TMenuItem;
+    mm02s01: TMenuItem;
+    mm02s02: TMenuItem;
+    mm02s03: TMenuItem;
+    mm03: TMenuItem;
+    mm03s01: TMenuItem;
+    mm03s02: TMenuItem;
+    mm03s03: TMenuItem;
+    mm03s04: TMenuItem;
+    mm03s05: TMenuItem;
+    mm03s05s02: TMenuItem;
+    mm03s05s01: TMenuItem;
+    mm03s05s03: TMenuItem;
+    mm03s05s04: TMenuItem;
+    mm03s05s05: TMenuItem;
+    mm03s05s06: TMenuItem;
+    mm05: TMenuItem;
+    mm06: TMenuItem;
+    mm08: TMenuItem;
+    N1: TMenuItem;
+    N2: TMenuItem;
+    N3: TMenuItem;
+    N4: TMenuItem;
+    N5: TMenuItem;
+    N6: TMenuItem;
+
+    mm09: TMenuItem;
+    mm13: TMenuItem;
+    mm14: TMenuItem;
+
+    pnlDevice: TPanel;
+    tkb_CabinAlt: TTrackBar;
+    tkb_DiffPress: TTrackBar;
+    lbl_diffPres: TLabel;
+    lbl_cabAlt: TLabel;
+    SIN_cabAlt: TLabel;
+    COS_cabAlt: TLabel;
+    SIN_diffPres: TLabel;
+    COS_diffPres: TLabel;
+    PageControl1: TPageControl;
+    TabSheet1: TTabSheet;
+    lblScrollRate: TLabel;
+    lblTestSoftwarePNValue: TLabel;
+    lblIPAddress: TLabel;
+    lblReceivePort: TLabel;
+    lblFirmwareTitle1: TLabel;
+    lblFirmwareTitle2: TLabel;
+    lblFirmwareValue1: TLabel;
+    lblWARNING: TLabel;
+    lblTestSoftwarePNTile: TLabel;
+    lblTestSoftwareRevValue: TLabel;
+    lblTestSoftwareRevTile: TLabel;
+    imgSimtekLogo: TImage;
+    lblFirmwareValue2: TLabel;
+    edtIPAddress: TEdit;
+    edtClientPort: TEdit;
+    pnlDividerBar05: TPanel;
+    pnlDividerBar03: TPanel;
+    pnlDividerBar01: TPanel;
+    pnlDividerBar02: TPanel;
+    pnlDividerBar04: TPanel;
+    tkbScrollRate: TTrackBar;
+    memoRevision: TMemo;
+    TabSheet4: TTabSheet;
+    lblResponseRequestsTitle1: TLabel;
+    lblResponseRequestsTitle2: TLabel;
+    lblRecievedTimeout: TLabel;
+    lblC2TransmitRate: TLabel;
+    lblC3TransmitRate: TLabel;
+    lblC4TransmitRate: TLabel;
+    lblTransmitRate: TLabel;
+    lblRequestsSent: TLabel;
+    lblResponseRecieved: TLabel;
+    lblC5TransmitRate: TLabel;
+    lblC6TransmitRate: TLabel;
+    cbxResponse: TCheckBox;
+    tkbRecieveTimeOut: TTrackBar;
+    tkbC2UpdateRate: TTrackBar;
+    tkbC3UpdateRate: TTrackBar;
+    tkbC4UpdateRate: TTrackBar;
+    tbUpdateRate: TTrackBar;
+    cbxGraphicsEnable: TCheckBox;
+    cbxTRXWindowEnable: TCheckBox;
+    cbxRDXWindowEnable: TCheckBox;
+    ScrollBar2: TScrollBar;
+    tkbC5UpdateRate: TTrackBar;
+    tkbC6UpdateRate: TTrackBar;
+    Label1: TLabel;
+    Label3: TLabel;
+    Label4: TLabel;
+    Label5: TLabel;
+    edt_Dial: TEdit;
+
+    procedure FormCreate(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+
+    procedure PopupMenu1Popup(Sender: TObject);
+    procedure Copy1Click(Sender: TObject);
+    procedure Cut1Click(Sender: TObject);
+    procedure Delete1Click(Sender: TObject);
+    procedure Paste1Click(Sender: TObject);
+    procedure Selectall1Click(Sender: TObject);
+    procedure pmClearAllClick(Sender: TObject);
+    procedure Print1Click(Sender: TObject);
+
+    procedure DXTimer1Timer(Sender: TObject; LagCount: Integer);
+
+
+    procedure memoTxChange(Sender: TObject);
+    procedure memoRxChange(Sender: TObject);
+    procedure memoTxKeyPress(Sender: TObject; var Key: char);
+    procedure memoRxKeyPress(Sender: TObject; var Key: char);
+
+    procedure tbUpdateRateChange(Sender: TObject);
+    procedure lblFirmwareTitle1Click(Sender: TObject);
+    procedure edtClientPortKeyPress(Sender: TObject; var Key: char);
+    procedure edtIPAddressKeyPress(Sender: TObject; var Key: char);
+    procedure tkbScrollRateChange(Sender: TObject);
+    procedure cbxResponseClick(Sender: TObject);
+
+
+    procedure tkbRecieveTimeOutChange(Sender: TObject);
+
+    procedure mm01s01Click(Sender: TObject);
+    procedure mm02s01Click(Sender: TObject);
+    procedure mm03s01Click(Sender: TObject);
+    procedure mm02s03Click(Sender: TObject);
+    procedure mm03s03Click(Sender: TObject);
+    procedure mm03s05s00Click(Sender: TObject);
+    //procedure mm04Click(Sender: TObject);
+    procedure mm05Click(Sender: TObject);
+    procedure mm06Click(Sender: TObject);
+    procedure mm08Click(Sender: TObject);
+    procedure memoRevisionEnter(Sender: TObject);
+    procedure memoRevisionMouseLeave(Sender: TObject);
+    procedure ScrollBar2Change(Sender: TObject);
+    procedure imgSimtekLogoClick(Sender: TObject);
+    procedure memoRevisionExit(Sender: TObject);
+    procedure mm09Click(Sender: TObject);
+
+    procedure tkbC2UpdateRateChange(Sender: TObject);
+    procedure mm02s02Click(Sender: TObject);
+    procedure tkbC3UpdateRateChange(Sender: TObject);
+    procedure tkbC4UpdateRateChange(Sender: TObject);
+    procedure tkbC5UpdateRateChange(Sender: TObject);
+    procedure tkbC6UpdateRateChange(Sender: TObject);
+    procedure tkb_CabinAltChange(Sender: TObject);
+    procedure tkb_DiffPressChange(Sender: TObject);
+    procedure edt_DialClick(Sender: TObject);
+    procedure edt_DialKeyPress(Sender: TObject; var Key: Char);
+  private
+    procedure paintGUI;
+    procedure decodeRecievedData(s : string);
+    function  encodeCommandData(CommandByte : byte) : string;
+    function  buildMainCaption : string;
+    function  calculateRate(ct : double;g : Tx;rc : boolean;l : TObject;t : TObject;s : string):Tx;
+    procedure cpOutputData(s : string; rc : boolean);
+    procedure scrollEverything();
+    procedure wrMemoWindow(show,memo,lbl :TObject; Limit,Place : integer;head,cap,s : string);
+
+    procedure responseReset;
+    procedure responseFirmware(s : string);
+
+  public
+  end;
+
+var
+  MainForm                 : TMainForm;
+  hWind                    : THandle;
+// Variables to control Software functions
+  dScrollValue             : byte    = 0;
+  ScrollCount              : integer = 0;
+  TXCount                  : byte    = 1; {define and initilize Counter}
+  RXCount                  : byte    = 1; {define and initilize Counter}
+  sWidth                   : integer = 1024;
+// Software control variables
+  RxWinLimit               : integer = 0;
+  RxPlace                  : integer = 0;
+  TxWinLimit               : integer = 0;
+  TxPlace                  : integer = 0;
+// Device Output control variables
+  fImageRedraw             : boolean;
+
+  ActiveDigit              : cardinal = 0;
+  C0RequestData            : array[0..C0Requestlength] of byte; // reset
+  //C1RequestData            : array[0..C1Requestlength] of byte; // options
+  C2RequestData            : array[0..C2Requestlength] of byte; // program revision
+  C3RequestData            : array[0..C3Requestlength] of byte; // Control
+  //C4RequestData            : array[0..C4Requestlength] of byte; // indicator
+  //C5RequestData            : array[0..C5Requestlength] of byte; // dimmimg
+  //C6RequestData            : array[0..C6Requestlength] of byte; // status
+
+  C2ResponseData           : array[0..C2Responselength] of byte; // program revision
+
+// Host to Instrument request Action Flags
+  fC0Request               : boolean  = False; // reset
+  fC1Request               : boolean  = False; // options
+  fC2Request               : boolean  = False; // program revision
+  fC3Request               : boolean  = False; // Control
+
+  fScrollReq               : boolean  = False; // scroll change flag
+  fgeneric                 : boolean  = False;
+
+// Device Input control variables
+  swMode                   : byte     = 1;
+  swPreset                 : byte     = 1;
+
+// Device BIT control variables
+  fPTInputStatus           : boolean  = False;
+  fCTInputStatus           : boolean  = False;
+  fRKInputStatus           : boolean  = False;
+  fOFLInputStatus          : boolean  = False;
+  fEBInputStaus            : boolean  = False;
+  fZALLInputStatus         : boolean  = False;
+  fPresetPWROFFInputStatus : boolean  = False;
+  fPresetMANInputStatus    : boolean  = False;
+  fPreset1InputStatus      : boolean  = False;
+  fPreset2InputStatus      : boolean  = False;
+  fPreset3InputStatus      : boolean  = False;
+  fPreset4InputStatus      : boolean  = False;
+  fPreset5InputStatus      : boolean  = False;
+  fPreset6InputStatus      : boolean  = False;
+  fPresetREMInputStatus    : boolean  = False;
+  fINITInputStatus         : boolean  = False;
+  fRightArrowInputStatus   : boolean  = False;
+  fUpArrowInputStatus      : boolean  = False;
+  fBRTDSPLA2DInputStatus   : boolean  = False;
+  fBRTPNLA2DInputStatus    : boolean  = False;
+  fMemoryStatus            : boolean  = False;
+// Display Dimming Variables
+  tkbDimming2Old           : integer;
+  tkbDimming1Old           : integer;
+//tkbDimming3Old           : integer;
+//flgDimming3Old           : boolean  = False;
+// Debug Variables
+  NumberOfRequests         : cardinal = 0;
+  UserImageSelected        : boolean  = True;
+  NumberOfResponse         : cardinal = 0;
+  gRate                    : Tx;
+  gRateC1                  : Tx; // StatusRequest      = $F1;
+  gRateC2                  : Tx; // DisplayRequest     = $F2;
+  gRateC3                  : Tx; // DimmingRequest     = $F3;
+  gRateC4                  : Tx; // FirmwareRequest    = $F4;
+  gRateC5                  : Tx; // FirmwareRequest    = $F4;
+  gRateC6                  : Tx; // FirmwareRequest    = $F4;
+  BurstFileName            : string = 'BurstFile.txt';
+  BurstFileContents        : TStringlist = nil;
+  //bit to reset procedures
+  resetbit                  : boolean;               //
+
+  oldSlider  : integer;
+  statusFlg  : boolean;
+  ScrollDial : integer;
+  ScrollDir  : boolean;
+
+sine_value : array[0..4095] of word =
+(
+$0800,$0802,$0805,$0808,$080C,$080F,$0812,$0815,$0818,$081B,$081E,$0822,$0825,$0828,$082B,$082E,
+$0831,$0834,$0838,$083B,$083E,$0841,$0844,$0847,$084A,$084E,$0851,$0854,$0857,$085A,$085D,$0860,
+$0863,$0867,$086A,$086D,$0870,$0873,$0876,$0879,$087D,$0880,$0883,$0886,$0889,$088C,$088F,$0892,
+$0896,$0899,$089C,$089F,$08A2,$08A5,$08A8,$08AC,$08AF,$08B2,$08B5,$08B8,$08BB,$08BE,$08C1,$08C5,
+$08C8,$08CB,$08CE,$08D1,$08D4,$08D7,$08DA,$08DE,$08E1,$08E4,$08E7,$08EA,$08ED,$08F0,$08F3,$08F7,
+$08FA,$08FD,$0900,$0903,$0906,$0909,$090C,$090F,$0913,$0916,$0919,$091C,$091F,$0922,$0925,$0928,
+$092B,$092F,$0932,$0935,$0938,$093B,$093E,$0941,$0944,$0947,$094A,$094E,$0951,$0954,$0957,$095A,
+$095D,$0960,$0963,$0966,$0969,$096D,$0970,$0973,$0976,$0979,$097C,$097F,$0982,$0985,$0988,$098B,
+$098E,$0992,$0995,$0998,$099B,$099E,$09A1,$09A4,$09A7,$09AA,$09AD,$09B0,$09B3,$09B6,$09B9,$09BD,
+$09C0,$09C3,$09C6,$09C9,$09CC,$09CF,$09D2,$09D5,$09D8,$09DB,$09DE,$09E1,$09E4,$09E7,$09EA,$09ED,
+$09F1,$09F4,$09F7,$09FA,$09FD,$0A00,$0A03,$0A06,$0A09,$0A0C,$0A0F,$0A12,$0A15,$0A18,$0A1B,$0A1E,
+$0A21,$0A24,$0A27,$0A2A,$0A2D,$0A30,$0A33,$0A36,$0A39,$0A3C,$0A3F,$0A42,$0A45,$0A48,$0A4B,$0A4E,
+$0A51,$0A54,$0A57,$0A5A,$0A5D,$0A60,$0A63,$0A66,$0A69,$0A6C,$0A6F,$0A72,$0A75,$0A78,$0A7B,$0A7E,
+$0A81,$0A84,$0A87,$0A8A,$0A8D,$0A90,$0A93,$0A96,$0A99,$0A9C,$0A9F,$0AA2,$0AA5,$0AA8,$0AAB,$0AAE,
+$0AB1,$0AB4,$0AB7,$0ABA,$0ABD,$0AC0,$0AC2,$0AC5,$0AC8,$0ACB,$0ACE,$0AD1,$0AD4,$0AD7,$0ADA,$0ADD,
+$0AE0,$0AE3,$0AE6,$0AE9,$0AEC,$0AEF,$0AF1,$0AF4,$0AF7,$0AFA,$0AFD,$0B00,$0B03,$0B06,$0B09,$0B0C,
+$0B0F,$0B11,$0B14,$0B17,$0B1A,$0B1D,$0B20,$0B23,$0B26,$0B29,$0B2B,$0B2E,$0B31,$0B34,$0B37,$0B3A,
+$0B3D,$0B40,$0B42,$0B45,$0B48,$0B4B,$0B4E,$0B51,$0B54,$0B56,$0B59,$0B5C,$0B5F,$0B62,$0B65,$0B68,
+$0B6A,$0B6D,$0B70,$0B73,$0B76,$0B79,$0B7B,$0B7E,$0B81,$0B84,$0B87,$0B8A,$0B8C,$0B8F,$0B92,$0B95,
+$0B98,$0B9A,$0B9D,$0BA0,$0BA3,$0BA6,$0BA8,$0BAB,$0BAE,$0BB1,$0BB4,$0BB6,$0BB9,$0BBC,$0BBF,$0BC1,
+$0BC4,$0BC7,$0BCA,$0BCC,$0BCF,$0BD2,$0BD5,$0BD8,$0BDA,$0BDD,$0BE0,$0BE3,$0BE5,$0BE8,$0BEB,$0BED,
+$0BF0,$0BF3,$0BF6,$0BF8,$0BFB,$0BFE,$0C01,$0C03,$0C06,$0C09,$0C0B,$0C0E,$0C11,$0C14,$0C16,$0C19,
+$0C1C,$0C1E,$0C21,$0C24,$0C26,$0C29,$0C2C,$0C2E,$0C31,$0C34,$0C36,$0C39,$0C3C,$0C3E,$0C41,$0C44,
+$0C46,$0C49,$0C4C,$0C4E,$0C51,$0C54,$0C56,$0C59,$0C5C,$0C5E,$0C61,$0C63,$0C66,$0C69,$0C6B,$0C6E,
+$0C71,$0C73,$0C76,$0C78,$0C7B,$0C7E,$0C80,$0C83,$0C85,$0C88,$0C8B,$0C8D,$0C90,$0C92,$0C95,$0C97,
+$0C9A,$0C9D,$0C9F,$0CA2,$0CA4,$0CA7,$0CA9,$0CAC,$0CAE,$0CB1,$0CB4,$0CB6,$0CB9,$0CBB,$0CBE,$0CC0,
+$0CC3,$0CC5,$0CC8,$0CCA,$0CCD,$0CCF,$0CD2,$0CD4,$0CD7,$0CD9,$0CDC,$0CDE,$0CE1,$0CE3,$0CE6,$0CE8,
+$0CEB,$0CED,$0CF0,$0CF2,$0CF5,$0CF7,$0CF9,$0CFC,$0CFE,$0D01,$0D03,$0D06,$0D08,$0D0B,$0D0D,$0D0F,
+$0D12,$0D14,$0D17,$0D19,$0D1C,$0D1E,$0D20,$0D23,$0D25,$0D28,$0D2A,$0D2C,$0D2F,$0D31,$0D34,$0D36,
+$0D38,$0D3B,$0D3D,$0D3F,$0D42,$0D44,$0D47,$0D49,$0D4B,$0D4E,$0D50,$0D52,$0D55,$0D57,$0D59,$0D5C,
+$0D5E,$0D60,$0D63,$0D65,$0D67,$0D6A,$0D6C,$0D6E,$0D71,$0D73,$0D75,$0D77,$0D7A,$0D7C,$0D7E,$0D81,
+$0D83,$0D85,$0D87,$0D8A,$0D8C,$0D8E,$0D90,$0D93,$0D95,$0D97,$0D99,$0D9C,$0D9E,$0DA0,$0DA2,$0DA5,
+$0DA7,$0DA9,$0DAB,$0DAD,$0DB0,$0DB2,$0DB4,$0DB6,$0DB8,$0DBB,$0DBD,$0DBF,$0DC1,$0DC3,$0DC6,$0DC8,
+$0DCA,$0DCC,$0DCE,$0DD0,$0DD3,$0DD5,$0DD7,$0DD9,$0DDB,$0DDD,$0DDF,$0DE2,$0DE4,$0DE6,$0DE8,$0DEA,
+$0DEC,$0DEE,$0DF0,$0DF2,$0DF5,$0DF7,$0DF9,$0DFB,$0DFD,$0DFF,$0E01,$0E03,$0E05,$0E07,$0E09,$0E0B,
+$0E0D,$0E0F,$0E11,$0E14,$0E16,$0E18,$0E1A,$0E1C,$0E1E,$0E20,$0E22,$0E24,$0E26,$0E28,$0E2A,$0E2C,
+$0E2E,$0E30,$0E32,$0E34,$0E36,$0E38,$0E3A,$0E3C,$0E3E,$0E40,$0E41,$0E43,$0E45,$0E47,$0E49,$0E4B,
+$0E4D,$0E4F,$0E51,$0E53,$0E55,$0E57,$0E59,$0E5B,$0E5C,$0E5E,$0E60,$0E62,$0E64,$0E66,$0E68,$0E6A,
+$0E6C,$0E6D,$0E6F,$0E71,$0E73,$0E75,$0E77,$0E79,$0E7A,$0E7C,$0E7E,$0E80,$0E82,$0E84,$0E85,$0E87,
+$0E89,$0E8B,$0E8D,$0E8E,$0E90,$0E92,$0E94,$0E96,$0E97,$0E99,$0E9B,$0E9D,$0E9E,$0EA0,$0EA2,$0EA4,
+$0EA5,$0EA7,$0EA9,$0EAB,$0EAC,$0EAE,$0EB0,$0EB2,$0EB3,$0EB5,$0EB7,$0EB8,$0EBA,$0EBC,$0EBD,$0EBF,
+$0EC1,$0EC3,$0EC4,$0EC6,$0EC8,$0EC9,$0ECB,$0ECD,$0ECE,$0ED0,$0ED1,$0ED3,$0ED5,$0ED6,$0ED8,$0EDA,
+$0EDB,$0EDD,$0EDE,$0EE0,$0EE2,$0EE3,$0EE5,$0EE6,$0EE8,$0EEA,$0EEB,$0EED,$0EEE,$0EF0,$0EF1,$0EF3,
+$0EF5,$0EF6,$0EF8,$0EF9,$0EFB,$0EFC,$0EFE,$0EFF,$0F01,$0F02,$0F04,$0F05,$0F07,$0F08,$0F0A,$0F0B,
+$0F0D,$0F0E,$0F10,$0F11,$0F13,$0F14,$0F16,$0F17,$0F18,$0F1A,$0F1B,$0F1D,$0F1E,$0F20,$0F21,$0F22,
+$0F24,$0F25,$0F27,$0F28,$0F29,$0F2B,$0F2C,$0F2E,$0F2F,$0F30,$0F32,$0F33,$0F35,$0F36,$0F37,$0F39,
+$0F3A,$0F3B,$0F3D,$0F3E,$0F3F,$0F41,$0F42,$0F43,$0F45,$0F46,$0F47,$0F48,$0F4A,$0F4B,$0F4C,$0F4E,
+$0F4F,$0F50,$0F51,$0F53,$0F54,$0F55,$0F56,$0F58,$0F59,$0F5A,$0F5B,$0F5D,$0F5E,$0F5F,$0F60,$0F61,
+$0F63,$0F64,$0F65,$0F66,$0F67,$0F69,$0F6A,$0F6B,$0F6C,$0F6D,$0F6E,$0F70,$0F71,$0F72,$0F73,$0F74,
+$0F75,$0F76,$0F78,$0F79,$0F7A,$0F7B,$0F7C,$0F7D,$0F7E,$0F7F,$0F80,$0F81,$0F83,$0F84,$0F85,$0F86,
+$0F87,$0F88,$0F89,$0F8A,$0F8B,$0F8C,$0F8D,$0F8E,$0F8F,$0F90,$0F91,$0F92,$0F93,$0F94,$0F95,$0F96,
+$0F97,$0F98,$0F99,$0F9A,$0F9B,$0F9C,$0F9D,$0F9E,$0F9F,$0FA0,$0FA1,$0FA2,$0FA3,$0FA4,$0FA5,$0FA5,
+$0FA6,$0FA7,$0FA8,$0FA9,$0FAA,$0FAB,$0FAC,$0FAD,$0FAD,$0FAE,$0FAF,$0FB0,$0FB1,$0FB2,$0FB3,$0FB3,
+$0FB4,$0FB5,$0FB6,$0FB7,$0FB8,$0FB8,$0FB9,$0FBA,$0FBB,$0FBC,$0FBC,$0FBD,$0FBE,$0FBF,$0FC0,$0FC0,
+$0FC1,$0FC2,$0FC3,$0FC3,$0FC4,$0FC5,$0FC6,$0FC6,$0FC7,$0FC8,$0FC9,$0FC9,$0FCA,$0FCB,$0FCB,$0FCC,
+$0FCD,$0FCD,$0FCE,$0FCF,$0FCF,$0FD0,$0FD1,$0FD1,$0FD2,$0FD3,$0FD3,$0FD4,$0FD5,$0FD5,$0FD6,$0FD7,
+$0FD7,$0FD8,$0FD8,$0FD9,$0FDA,$0FDA,$0FDB,$0FDB,$0FDC,$0FDC,$0FDD,$0FDE,$0FDE,$0FDF,$0FDF,$0FE0,
+$0FE0,$0FE1,$0FE1,$0FE2,$0FE2,$0FE3,$0FE3,$0FE4,$0FE4,$0FE5,$0FE5,$0FE6,$0FE6,$0FE7,$0FE7,$0FE8,
+$0FE8,$0FE9,$0FE9,$0FEA,$0FEA,$0FEB,$0FEB,$0FEB,$0FEC,$0FEC,$0FED,$0FED,$0FEE,$0FEE,$0FEE,$0FEF,
+$0FEF,$0FEF,$0FF0,$0FF0,$0FF1,$0FF1,$0FF1,$0FF2,$0FF2,$0FF2,$0FF3,$0FF3,$0FF3,$0FF4,$0FF4,$0FF4,
+$0FF5,$0FF5,$0FF5,$0FF6,$0FF6,$0FF6,$0FF6,$0FF7,$0FF7,$0FF7,$0FF7,$0FF8,$0FF8,$0FF8,$0FF8,$0FF9,
+$0FF9,$0FF9,$0FF9,$0FFA,$0FFA,$0FFA,$0FFA,$0FFA,$0FFB,$0FFB,$0FFB,$0FFB,$0FFB,$0FFC,$0FFC,$0FFC,
+$0FFC,$0FFC,$0FFC,$0FFC,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFE,$0FFE,$0FFE,$0FFE,
+$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,
+$0FFF,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,
+$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFC,$0FFC,$0FFC,
+$0FFC,$0FFC,$0FFC,$0FFC,$0FFB,$0FFB,$0FFB,$0FFB,$0FFB,$0FFA,$0FFA,$0FFA,$0FFA,$0FFA,$0FF9,$0FF9,
+$0FF9,$0FF9,$0FF8,$0FF8,$0FF8,$0FF8,$0FF7,$0FF7,$0FF7,$0FF7,$0FF6,$0FF6,$0FF6,$0FF6,$0FF5,$0FF5,
+$0FF5,$0FF4,$0FF4,$0FF4,$0FF3,$0FF3,$0FF3,$0FF2,$0FF2,$0FF2,$0FF1,$0FF1,$0FF1,$0FF0,$0FF0,$0FEF,
+$0FEF,$0FEF,$0FEE,$0FEE,$0FEE,$0FED,$0FED,$0FEC,$0FEC,$0FEB,$0FEB,$0FEB,$0FEA,$0FEA,$0FE9,$0FE9,
+$0FE8,$0FE8,$0FE7,$0FE7,$0FE6,$0FE6,$0FE5,$0FE5,$0FE4,$0FE4,$0FE3,$0FE3,$0FE2,$0FE2,$0FE1,$0FE1,
+$0FE0,$0FE0,$0FDF,$0FDF,$0FDE,$0FDE,$0FDD,$0FDC,$0FDC,$0FDB,$0FDB,$0FDA,$0FDA,$0FD9,$0FD8,$0FD8,
+$0FD7,$0FD7,$0FD6,$0FD5,$0FD5,$0FD4,$0FD3,$0FD3,$0FD2,$0FD1,$0FD1,$0FD0,$0FCF,$0FCF,$0FCE,$0FCD,
+$0FCD,$0FCC,$0FCB,$0FCB,$0FCA,$0FC9,$0FC9,$0FC8,$0FC7,$0FC6,$0FC6,$0FC5,$0FC4,$0FC3,$0FC3,$0FC2,
+$0FC1,$0FC0,$0FC0,$0FBF,$0FBE,$0FBD,$0FBC,$0FBC,$0FBB,$0FBA,$0FB9,$0FB8,$0FB8,$0FB7,$0FB6,$0FB5,
+$0FB4,$0FB3,$0FB3,$0FB2,$0FB1,$0FB0,$0FAF,$0FAE,$0FAD,$0FAD,$0FAC,$0FAB,$0FAA,$0FA9,$0FA8,$0FA7,
+$0FA6,$0FA5,$0FA5,$0FA4,$0FA3,$0FA2,$0FA1,$0FA0,$0F9F,$0F9E,$0F9D,$0F9C,$0F9B,$0F9A,$0F99,$0F98,
+$0F97,$0F96,$0F95,$0F94,$0F93,$0F92,$0F91,$0F90,$0F8F,$0F8E,$0F8D,$0F8C,$0F8B,$0F8A,$0F89,$0F88,
+$0F87,$0F86,$0F85,$0F84,$0F83,$0F81,$0F80,$0F7F,$0F7E,$0F7D,$0F7C,$0F7B,$0F7A,$0F79,$0F78,$0F76,
+$0F75,$0F74,$0F73,$0F72,$0F71,$0F70,$0F6E,$0F6D,$0F6C,$0F6B,$0F6A,$0F69,$0F67,$0F66,$0F65,$0F64,
+$0F63,$0F61,$0F60,$0F5F,$0F5E,$0F5D,$0F5B,$0F5A,$0F59,$0F58,$0F56,$0F55,$0F54,$0F53,$0F51,$0F50,
+$0F4F,$0F4E,$0F4C,$0F4B,$0F4A,$0F48,$0F47,$0F46,$0F45,$0F43,$0F42,$0F41,$0F3F,$0F3E,$0F3D,$0F3B,
+$0F3A,$0F39,$0F37,$0F36,$0F35,$0F33,$0F32,$0F30,$0F2F,$0F2E,$0F2C,$0F2B,$0F29,$0F28,$0F27,$0F25,
+$0F24,$0F22,$0F21,$0F20,$0F1E,$0F1D,$0F1B,$0F1A,$0F18,$0F17,$0F16,$0F14,$0F13,$0F11,$0F10,$0F0E,
+$0F0D,$0F0B,$0F0A,$0F08,$0F07,$0F05,$0F04,$0F02,$0F01,$0EFF,$0EFE,$0EFC,$0EFB,$0EF9,$0EF8,$0EF6,
+$0EF5,$0EF3,$0EF1,$0EF0,$0EEE,$0EED,$0EEB,$0EEA,$0EE8,$0EE6,$0EE5,$0EE3,$0EE2,$0EE0,$0EDE,$0EDD,
+$0EDB,$0EDA,$0ED8,$0ED6,$0ED5,$0ED3,$0ED1,$0ED0,$0ECE,$0ECD,$0ECB,$0EC9,$0EC8,$0EC6,$0EC4,$0EC3,
+$0EC1,$0EBF,$0EBD,$0EBC,$0EBA,$0EB8,$0EB7,$0EB5,$0EB3,$0EB2,$0EB0,$0EAE,$0EAC,$0EAB,$0EA9,$0EA7,
+$0EA5,$0EA4,$0EA2,$0EA0,$0E9E,$0E9D,$0E9B,$0E99,$0E97,$0E96,$0E94,$0E92,$0E90,$0E8E,$0E8D,$0E8B,
+$0E89,$0E87,$0E85,$0E84,$0E82,$0E80,$0E7E,$0E7C,$0E7A,$0E79,$0E77,$0E75,$0E73,$0E71,$0E6F,$0E6D,
+$0E6C,$0E6A,$0E68,$0E66,$0E64,$0E62,$0E60,$0E5E,$0E5C,$0E5B,$0E59,$0E57,$0E55,$0E53,$0E51,$0E4F,
+$0E4D,$0E4B,$0E49,$0E47,$0E45,$0E43,$0E41,$0E40,$0E3E,$0E3C,$0E3A,$0E38,$0E36,$0E34,$0E32,$0E30,
+$0E2E,$0E2C,$0E2A,$0E28,$0E26,$0E24,$0E22,$0E20,$0E1E,$0E1C,$0E1A,$0E18,$0E16,$0E14,$0E11,$0E0F,
+$0E0D,$0E0B,$0E09,$0E07,$0E05,$0E03,$0E01,$0DFF,$0DFD,$0DFB,$0DF9,$0DF7,$0DF5,$0DF2,$0DF0,$0DEE,
+$0DEC,$0DEA,$0DE8,$0DE6,$0DE4,$0DE2,$0DDF,$0DDD,$0DDB,$0DD9,$0DD7,$0DD5,$0DD3,$0DD0,$0DCE,$0DCC,
+$0DCA,$0DC8,$0DC6,$0DC3,$0DC1,$0DBF,$0DBD,$0DBB,$0DB8,$0DB6,$0DB4,$0DB2,$0DB0,$0DAD,$0DAB,$0DA9,
+$0DA7,$0DA5,$0DA2,$0DA0,$0D9E,$0D9C,$0D99,$0D97,$0D95,$0D93,$0D90,$0D8E,$0D8C,$0D8A,$0D87,$0D85,
+$0D83,$0D81,$0D7E,$0D7C,$0D7A,$0D77,$0D75,$0D73,$0D71,$0D6E,$0D6C,$0D6A,$0D67,$0D65,$0D63,$0D60,
+$0D5E,$0D5C,$0D59,$0D57,$0D55,$0D52,$0D50,$0D4E,$0D4B,$0D49,$0D47,$0D44,$0D42,$0D3F,$0D3D,$0D3B,
+$0D38,$0D36,$0D34,$0D31,$0D2F,$0D2C,$0D2A,$0D28,$0D25,$0D23,$0D20,$0D1E,$0D1C,$0D19,$0D17,$0D14,
+$0D12,$0D0F,$0D0D,$0D0B,$0D08,$0D06,$0D03,$0D01,$0CFE,$0CFC,$0CF9,$0CF7,$0CF5,$0CF2,$0CF0,$0CED,
+$0CEB,$0CE8,$0CE6,$0CE3,$0CE1,$0CDE,$0CDC,$0CD9,$0CD7,$0CD4,$0CD2,$0CCF,$0CCD,$0CCA,$0CC8,$0CC5,
+$0CC3,$0CC0,$0CBE,$0CBB,$0CB9,$0CB6,$0CB4,$0CB1,$0CAE,$0CAC,$0CA9,$0CA7,$0CA4,$0CA2,$0C9F,$0C9D,
+$0C9A,$0C97,$0C95,$0C92,$0C90,$0C8D,$0C8B,$0C88,$0C85,$0C83,$0C80,$0C7E,$0C7B,$0C78,$0C76,$0C73,
+$0C71,$0C6E,$0C6B,$0C69,$0C66,$0C63,$0C61,$0C5E,$0C5C,$0C59,$0C56,$0C54,$0C51,$0C4E,$0C4C,$0C49,
+$0C46,$0C44,$0C41,$0C3E,$0C3C,$0C39,$0C36,$0C34,$0C31,$0C2E,$0C2C,$0C29,$0C26,$0C24,$0C21,$0C1E,
+$0C1C,$0C19,$0C16,$0C14,$0C11,$0C0E,$0C0B,$0C09,$0C06,$0C03,$0C01,$0BFE,$0BFB,$0BF8,$0BF6,$0BF3,
+$0BF0,$0BED,$0BEB,$0BE8,$0BE5,$0BE3,$0BE0,$0BDD,$0BDA,$0BD8,$0BD5,$0BD2,$0BCF,$0BCC,$0BCA,$0BC7,
+$0BC4,$0BC1,$0BBF,$0BBC,$0BB9,$0BB6,$0BB4,$0BB1,$0BAE,$0BAB,$0BA8,$0BA6,$0BA3,$0BA0,$0B9D,$0B9A,
+$0B98,$0B95,$0B92,$0B8F,$0B8C,$0B8A,$0B87,$0B84,$0B81,$0B7E,$0B7B,$0B79,$0B76,$0B73,$0B70,$0B6D,
+$0B6A,$0B68,$0B65,$0B62,$0B5F,$0B5C,$0B59,$0B56,$0B54,$0B51,$0B4E,$0B4B,$0B48,$0B45,$0B42,$0B40,
+$0B3D,$0B3A,$0B37,$0B34,$0B31,$0B2E,$0B2B,$0B29,$0B26,$0B23,$0B20,$0B1D,$0B1A,$0B17,$0B14,$0B11,
+$0B0F,$0B0C,$0B09,$0B06,$0B03,$0B00,$0AFD,$0AFA,$0AF7,$0AF4,$0AF1,$0AEF,$0AEC,$0AE9,$0AE6,$0AE3,
+$0AE0,$0ADD,$0ADA,$0AD7,$0AD4,$0AD1,$0ACE,$0ACB,$0AC8,$0AC5,$0AC2,$0AC0,$0ABD,$0ABA,$0AB7,$0AB4,
+$0AB1,$0AAE,$0AAB,$0AA8,$0AA5,$0AA2,$0A9F,$0A9C,$0A99,$0A96,$0A93,$0A90,$0A8D,$0A8A,$0A87,$0A84,
+$0A81,$0A7E,$0A7B,$0A78,$0A75,$0A72,$0A6F,$0A6C,$0A69,$0A66,$0A63,$0A60,$0A5D,$0A5A,$0A57,$0A54,
+$0A51,$0A4E,$0A4B,$0A48,$0A45,$0A42,$0A3F,$0A3C,$0A39,$0A36,$0A33,$0A30,$0A2D,$0A2A,$0A27,$0A24,
+$0A21,$0A1E,$0A1B,$0A18,$0A15,$0A12,$0A0F,$0A0C,$0A09,$0A06,$0A03,$0A00,$09FD,$09FA,$09F7,$09F4,
+$09F1,$09ED,$09EA,$09E7,$09E4,$09E1,$09DE,$09DB,$09D8,$09D5,$09D2,$09CF,$09CC,$09C9,$09C6,$09C3,
+$09C0,$09BD,$09B9,$09B6,$09B3,$09B0,$09AD,$09AA,$09A7,$09A4,$09A1,$099E,$099B,$0998,$0995,$0992,
+$098E,$098B,$0988,$0985,$0982,$097F,$097C,$0979,$0976,$0973,$0970,$096D,$0969,$0966,$0963,$0960,
+$095D,$095A,$0957,$0954,$0951,$094E,$094A,$0947,$0944,$0941,$093E,$093B,$0938,$0935,$0932,$092F,
+$092B,$0928,$0925,$0922,$091F,$091C,$0919,$0916,$0913,$090F,$090C,$0909,$0906,$0903,$0900,$08FD,
+$08FA,$08F7,$08F3,$08F0,$08ED,$08EA,$08E7,$08E4,$08E1,$08DE,$08DA,$08D7,$08D4,$08D1,$08CE,$08CB,
+$08C8,$08C5,$08C1,$08BE,$08BB,$08B8,$08B5,$08B2,$08AF,$08AC,$08A8,$08A5,$08A2,$089F,$089C,$0899,
+$0896,$0892,$088F,$088C,$0889,$0886,$0883,$0880,$087D,$0879,$0876,$0873,$0870,$086D,$086A,$0867,
+$0863,$0860,$085D,$085A,$0857,$0854,$0851,$084E,$084A,$0847,$0844,$0841,$083E,$083B,$0838,$0834,
+$0831,$082E,$082B,$0828,$0825,$0822,$081E,$081B,$0818,$0815,$0812,$080F,$080C,$0808,$0805,$0802,
+$0800,$07FC,$07F9,$07F6,$07F2,$07EF,$07EC,$07E9,$07E6,$07E3,$07E0,$07DC,$07D9,$07D6,$07D3,$07D0,
+$07CD,$07CA,$07C6,$07C3,$07C0,$07BD,$07BA,$07B7,$07B4,$07B0,$07AD,$07AA,$07A7,$07A4,$07A1,$079E,
+$079B,$0797,$0794,$0791,$078E,$078B,$0788,$0785,$0781,$077E,$077B,$0778,$0775,$0772,$076F,$076C,
+$0768,$0765,$0762,$075F,$075C,$0759,$0756,$0752,$074F,$074C,$0749,$0746,$0743,$0740,$073D,$0739,
+$0736,$0733,$0730,$072D,$072A,$0727,$0724,$0720,$071D,$071A,$0717,$0714,$0711,$070E,$070B,$0707,
+$0704,$0701,$06FE,$06FB,$06F8,$06F5,$06F2,$06EF,$06EB,$06E8,$06E5,$06E2,$06DF,$06DC,$06D9,$06D6,
+$06D3,$06CF,$06CC,$06C9,$06C6,$06C3,$06C0,$06BD,$06BA,$06B7,$06B4,$06B0,$06AD,$06AA,$06A7,$06A4,
+$06A1,$069E,$069B,$0698,$0695,$0691,$068E,$068B,$0688,$0685,$0682,$067F,$067C,$0679,$0676,$0673,
+$0670,$066C,$0669,$0666,$0663,$0660,$065D,$065A,$0657,$0654,$0651,$064E,$064B,$0648,$0645,$0641,
+$063E,$063B,$0638,$0635,$0632,$062F,$062C,$0629,$0626,$0623,$0620,$061D,$061A,$0617,$0614,$0611,
+$060D,$060A,$0607,$0604,$0601,$05FE,$05FB,$05F8,$05F5,$05F2,$05EF,$05EC,$05E9,$05E6,$05E3,$05E0,
+$05DD,$05DA,$05D7,$05D4,$05D1,$05CE,$05CB,$05C8,$05C5,$05C2,$05BF,$05BC,$05B9,$05B6,$05B3,$05B0,
+$05AD,$05AA,$05A7,$05A4,$05A1,$059E,$059B,$0598,$0595,$0592,$058F,$058C,$0589,$0586,$0583,$0580,
+$057D,$057A,$0577,$0574,$0571,$056E,$056B,$0568,$0565,$0562,$055F,$055C,$0559,$0556,$0553,$0550,
+$054D,$054A,$0547,$0544,$0541,$053E,$053C,$0539,$0536,$0533,$0530,$052D,$052A,$0527,$0524,$0521,
+$051E,$051B,$0518,$0515,$0512,$050F,$050D,$050A,$0507,$0504,$0501,$04FE,$04FB,$04F8,$04F5,$04F2,
+$04EF,$04ED,$04EA,$04E7,$04E4,$04E1,$04DE,$04DB,$04D8,$04D5,$04D3,$04D0,$04CD,$04CA,$04C7,$04C4,
+$04C1,$04BE,$04BC,$04B9,$04B6,$04B3,$04B0,$04AD,$04AA,$04A8,$04A5,$04A2,$049F,$049C,$0499,$0496,
+$0494,$0491,$048E,$048B,$0488,$0485,$0483,$0480,$047D,$047A,$0477,$0474,$0472,$046F,$046C,$0469,
+$0466,$0464,$0461,$045E,$045B,$0458,$0456,$0453,$0450,$044D,$044A,$0448,$0445,$0442,$043F,$043D,
+$043A,$0437,$0434,$0432,$042F,$042C,$0429,$0426,$0424,$0421,$041E,$041B,$0419,$0416,$0413,$0411,
+$040E,$040B,$0408,$0406,$0403,$0400,$03FD,$03FB,$03F8,$03F5,$03F3,$03F0,$03ED,$03EA,$03E8,$03E5,
+$03E2,$03E0,$03DD,$03DA,$03D8,$03D5,$03D2,$03D0,$03CD,$03CA,$03C8,$03C5,$03C2,$03C0,$03BD,$03BA,
+$03B8,$03B5,$03B2,$03B0,$03AD,$03AA,$03A8,$03A5,$03A2,$03A0,$039D,$039B,$0398,$0395,$0393,$0390,
+$038D,$038B,$0388,$0386,$0383,$0380,$037E,$037B,$0379,$0376,$0373,$0371,$036E,$036C,$0369,$0367,
+$0364,$0361,$035F,$035C,$035A,$0357,$0355,$0352,$0350,$034D,$034A,$0348,$0345,$0343,$0340,$033E,
+$033B,$0339,$0336,$0334,$0331,$032F,$032C,$032A,$0327,$0325,$0322,$0320,$031D,$031B,$0318,$0316,
+$0313,$0311,$030E,$030C,$0309,$0307,$0305,$0302,$0300,$02FD,$02FB,$02F8,$02F6,$02F3,$02F1,$02EF,
+$02EC,$02EA,$02E7,$02E5,$02E2,$02E0,$02DE,$02DB,$02D9,$02D6,$02D4,$02D2,$02CF,$02CD,$02CA,$02C8,
+$02C6,$02C3,$02C1,$02BF,$02BC,$02BA,$02B7,$02B5,$02B3,$02B0,$02AE,$02AC,$02A9,$02A7,$02A5,$02A2,
+$02A0,$029E,$029B,$0299,$0297,$0294,$0292,$0290,$028D,$028B,$0289,$0287,$0284,$0282,$0280,$027D,
+$027B,$0279,$0277,$0274,$0272,$0270,$026E,$026B,$0269,$0267,$0265,$0262,$0260,$025E,$025C,$0259,
+$0257,$0255,$0253,$0251,$024E,$024C,$024A,$0248,$0246,$0243,$0241,$023F,$023D,$023B,$0238,$0236,
+$0234,$0232,$0230,$022E,$022B,$0229,$0227,$0225,$0223,$0221,$021F,$021C,$021A,$0218,$0216,$0214,
+$0212,$0210,$020E,$020C,$0209,$0207,$0205,$0203,$0201,$01FF,$01FD,$01FB,$01F9,$01F7,$01F5,$01F3,
+$01F1,$01EF,$01ED,$01EA,$01E8,$01E6,$01E4,$01E2,$01E0,$01DE,$01DC,$01DA,$01D8,$01D6,$01D4,$01D2,
+$01D0,$01CE,$01CC,$01CA,$01C8,$01C6,$01C4,$01C2,$01C0,$01BE,$01BD,$01BB,$01B9,$01B7,$01B5,$01B3,
+$01B1,$01AF,$01AD,$01AB,$01A9,$01A7,$01A5,$01A3,$01A2,$01A0,$019E,$019C,$019A,$0198,$0196,$0194,
+$0192,$0191,$018F,$018D,$018B,$0189,$0187,$0185,$0184,$0182,$0180,$017E,$017C,$017A,$0179,$0177,
+$0175,$0173,$0171,$0170,$016E,$016C,$016A,$0168,$0167,$0165,$0163,$0161,$0160,$015E,$015C,$015A,
+$0159,$0157,$0155,$0153,$0152,$0150,$014E,$014C,$014B,$0149,$0147,$0146,$0144,$0142,$0141,$013F,
+$013D,$013B,$013A,$0138,$0136,$0135,$0133,$0131,$0130,$012E,$012D,$012B,$0129,$0128,$0126,$0124,
+$0123,$0121,$0120,$011E,$011C,$011B,$0119,$0118,$0116,$0114,$0113,$0111,$0110,$010E,$010D,$010B,
+$0109,$0108,$0106,$0105,$0103,$0102,$0100,$00FF,$00FD,$00FC,$00FA,$00F9,$00F7,$00F6,$00F4,$00F3,
+$00F1,$00F0,$00EE,$00ED,$00EB,$00EA,$00E8,$00E7,$00E6,$00E4,$00E3,$00E1,$00E0,$00DE,$00DD,$00DC,
+$00DA,$00D9,$00D7,$00D6,$00D5,$00D3,$00D2,$00D0,$00CF,$00CE,$00CC,$00CB,$00C9,$00C8,$00C7,$00C5,
+$00C4,$00C3,$00C1,$00C0,$00BF,$00BD,$00BC,$00BB,$00B9,$00B8,$00B7,$00B6,$00B4,$00B3,$00B2,$00B0,
+$00AF,$00AE,$00AD,$00AB,$00AA,$00A9,$00A8,$00A6,$00A5,$00A4,$00A3,$00A1,$00A0,$009F,$009E,$009D,
+$009B,$009A,$0099,$0098,$0097,$0095,$0094,$0093,$0092,$0091,$0090,$008E,$008D,$008C,$008B,$008A,
+$0089,$0088,$0086,$0085,$0084,$0083,$0082,$0081,$0080,$007F,$007E,$007D,$007B,$007A,$0079,$0078,
+$0077,$0076,$0075,$0074,$0073,$0072,$0071,$0070,$006F,$006E,$006D,$006C,$006B,$006A,$0069,$0068,
+$0067,$0066,$0065,$0064,$0063,$0062,$0061,$0060,$005F,$005E,$005D,$005C,$005B,$005A,$0059,$0059,
+$0058,$0057,$0056,$0055,$0054,$0053,$0052,$0051,$0051,$0050,$004F,$004E,$004D,$004C,$004B,$004B,
+$004A,$0049,$0048,$0047,$0046,$0046,$0045,$0044,$0043,$0042,$0042,$0041,$0040,$003F,$003E,$003E,
+$003D,$003C,$003B,$003B,$003A,$0039,$0038,$0038,$0037,$0036,$0035,$0035,$0034,$0033,$0033,$0032,
+$0031,$0031,$0030,$002F,$002F,$002E,$002D,$002D,$002C,$002B,$002B,$002A,$0029,$0029,$0028,$0027,
+$0027,$0026,$0026,$0025,$0024,$0024,$0023,$0023,$0022,$0022,$0021,$0020,$0020,$001F,$001F,$001E,
+$001E,$001D,$001D,$001C,$001C,$001B,$001B,$001A,$001A,$0019,$0019,$0018,$0018,$0017,$0017,$0016,
+$0016,$0015,$0015,$0014,$0014,$0013,$0013,$0013,$0012,$0012,$0011,$0011,$0010,$0010,$0010,$000F,
+$000F,$000F,$000E,$000E,$000D,$000D,$000D,$000C,$000C,$000C,$000B,$000B,$000B,$000A,$000A,$000A,
+$0009,$0009,$0009,$0008,$0008,$0008,$0008,$0007,$0007,$0007,$0007,$0006,$0006,$0006,$0006,$0005,
+$0005,$0005,$0005,$0004,$0004,$0004,$0004,$0004,$0003,$0003,$0003,$0003,$0003,$0002,$0002,$0002,
+$0002,$0002,$0002,$0002,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0000,$0000,$0000,$0000,
+$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,
+$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,
+$0000,$0000,$0000,$0000,$0000,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0002,$0002,$0002,
+$0002,$0002,$0002,$0002,$0003,$0003,$0003,$0003,$0003,$0004,$0004,$0004,$0004,$0004,$0005,$0005,
+$0005,$0005,$0006,$0006,$0006,$0006,$0007,$0007,$0007,$0007,$0008,$0008,$0008,$0008,$0009,$0009,
+$0009,$000A,$000A,$000A,$000B,$000B,$000B,$000C,$000C,$000C,$000D,$000D,$000D,$000E,$000E,$000F,
+$000F,$000F,$0010,$0010,$0010,$0011,$0011,$0012,$0012,$0013,$0013,$0013,$0014,$0014,$0015,$0015,
+$0016,$0016,$0017,$0017,$0018,$0018,$0019,$0019,$001A,$001A,$001B,$001B,$001C,$001C,$001D,$001D,
+$001E,$001E,$001F,$001F,$0020,$0020,$0021,$0022,$0022,$0023,$0023,$0024,$0024,$0025,$0026,$0026,
+$0027,$0027,$0028,$0029,$0029,$002A,$002B,$002B,$002C,$002D,$002D,$002E,$002F,$002F,$0030,$0031,
+$0031,$0032,$0033,$0033,$0034,$0035,$0035,$0036,$0037,$0038,$0038,$0039,$003A,$003B,$003B,$003C,
+$003D,$003E,$003E,$003F,$0040,$0041,$0042,$0042,$0043,$0044,$0045,$0046,$0046,$0047,$0048,$0049,
+$004A,$004B,$004B,$004C,$004D,$004E,$004F,$0050,$0051,$0051,$0052,$0053,$0054,$0055,$0056,$0057,
+$0058,$0059,$0059,$005A,$005B,$005C,$005D,$005E,$005F,$0060,$0061,$0062,$0063,$0064,$0065,$0066,
+$0067,$0068,$0069,$006A,$006B,$006C,$006D,$006E,$006F,$0070,$0071,$0072,$0073,$0074,$0075,$0076,
+$0077,$0078,$0079,$007A,$007B,$007D,$007E,$007F,$0080,$0081,$0082,$0083,$0084,$0085,$0086,$0088,
+$0089,$008A,$008B,$008C,$008D,$008E,$0090,$0091,$0092,$0093,$0094,$0095,$0097,$0098,$0099,$009A,
+$009B,$009D,$009E,$009F,$00A0,$00A1,$00A3,$00A4,$00A5,$00A6,$00A8,$00A9,$00AA,$00AB,$00AD,$00AE,
+$00AF,$00B0,$00B2,$00B3,$00B4,$00B6,$00B7,$00B8,$00B9,$00BB,$00BC,$00BD,$00BF,$00C0,$00C1,$00C3,
+$00C4,$00C5,$00C7,$00C8,$00C9,$00CB,$00CC,$00CE,$00CF,$00D0,$00D2,$00D3,$00D5,$00D6,$00D7,$00D9,
+$00DA,$00DC,$00DD,$00DE,$00E0,$00E1,$00E3,$00E4,$00E6,$00E7,$00E8,$00EA,$00EB,$00ED,$00EE,$00F0,
+$00F1,$00F3,$00F4,$00F6,$00F7,$00F9,$00FA,$00FC,$00FD,$00FF,$0100,$0102,$0103,$0105,$0106,$0108,
+$0109,$010B,$010D,$010E,$0110,$0111,$0113,$0114,$0116,$0118,$0119,$011B,$011C,$011E,$0120,$0121,
+$0123,$0124,$0126,$0128,$0129,$012B,$012D,$012E,$0130,$0131,$0133,$0135,$0136,$0138,$013A,$013B,
+$013D,$013F,$0141,$0142,$0144,$0146,$0147,$0149,$014B,$014C,$014E,$0150,$0152,$0153,$0155,$0157,
+$0159,$015A,$015C,$015E,$0160,$0161,$0163,$0165,$0167,$0168,$016A,$016C,$016E,$0170,$0171,$0173,
+$0175,$0177,$0179,$017A,$017C,$017E,$0180,$0182,$0184,$0185,$0187,$0189,$018B,$018D,$018F,$0191,
+$0192,$0194,$0196,$0198,$019A,$019C,$019E,$01A0,$01A2,$01A3,$01A5,$01A7,$01A9,$01AB,$01AD,$01AF,
+$01B1,$01B3,$01B5,$01B7,$01B9,$01BB,$01BD,$01BE,$01C0,$01C2,$01C4,$01C6,$01C8,$01CA,$01CC,$01CE,
+$01D0,$01D2,$01D4,$01D6,$01D8,$01DA,$01DC,$01DE,$01E0,$01E2,$01E4,$01E6,$01E8,$01EA,$01ED,$01EF,
+$01F1,$01F3,$01F5,$01F7,$01F9,$01FB,$01FD,$01FF,$0201,$0203,$0205,$0207,$0209,$020C,$020E,$0210,
+$0212,$0214,$0216,$0218,$021A,$021C,$021F,$0221,$0223,$0225,$0227,$0229,$022B,$022E,$0230,$0232,
+$0234,$0236,$0238,$023B,$023D,$023F,$0241,$0243,$0246,$0248,$024A,$024C,$024E,$0251,$0253,$0255,
+$0257,$0259,$025C,$025E,$0260,$0262,$0265,$0267,$0269,$026B,$026E,$0270,$0272,$0274,$0277,$0279,
+$027B,$027D,$0280,$0282,$0284,$0287,$0289,$028B,$028D,$0290,$0292,$0294,$0297,$0299,$029B,$029E,
+$02A0,$02A2,$02A5,$02A7,$02A9,$02AC,$02AE,$02B0,$02B3,$02B5,$02B7,$02BA,$02BC,$02BF,$02C1,$02C3,
+$02C6,$02C8,$02CA,$02CD,$02CF,$02D2,$02D4,$02D6,$02D9,$02DB,$02DE,$02E0,$02E2,$02E5,$02E7,$02EA,
+$02EC,$02EF,$02F1,$02F3,$02F6,$02F8,$02FB,$02FD,$0300,$0302,$0305,$0307,$0309,$030C,$030E,$0311,
+$0313,$0316,$0318,$031B,$031D,$0320,$0322,$0325,$0327,$032A,$032C,$032F,$0331,$0334,$0336,$0339,
+$033B,$033E,$0340,$0343,$0345,$0348,$034A,$034D,$0350,$0352,$0355,$0357,$035A,$035C,$035F,$0361,
+$0364,$0367,$0369,$036C,$036E,$0371,$0373,$0376,$0379,$037B,$037E,$0380,$0383,$0386,$0388,$038B,
+$038D,$0390,$0393,$0395,$0398,$039B,$039D,$03A0,$03A2,$03A5,$03A8,$03AA,$03AD,$03B0,$03B2,$03B5,
+$03B8,$03BA,$03BD,$03C0,$03C2,$03C5,$03C8,$03CA,$03CD,$03D0,$03D2,$03D5,$03D8,$03DA,$03DD,$03E0,
+$03E2,$03E5,$03E8,$03EA,$03ED,$03F0,$03F3,$03F5,$03F8,$03FB,$03FD,$0400,$0403,$0406,$0408,$040B,
+$040E,$0411,$0413,$0416,$0419,$041B,$041E,$0421,$0424,$0426,$0429,$042C,$042F,$0432,$0434,$0437,
+$043A,$043D,$043F,$0442,$0445,$0448,$044A,$044D,$0450,$0453,$0456,$0458,$045B,$045E,$0461,$0464,
+$0466,$0469,$046C,$046F,$0472,$0474,$0477,$047A,$047D,$0480,$0483,$0485,$0488,$048B,$048E,$0491,
+$0494,$0496,$0499,$049C,$049F,$04A2,$04A5,$04A8,$04AA,$04AD,$04B0,$04B3,$04B6,$04B9,$04BC,$04BE,
+$04C1,$04C4,$04C7,$04CA,$04CD,$04D0,$04D3,$04D5,$04D8,$04DB,$04DE,$04E1,$04E4,$04E7,$04EA,$04ED,
+$04EF,$04F2,$04F5,$04F8,$04FB,$04FE,$0501,$0504,$0507,$050A,$050D,$050F,$0512,$0515,$0518,$051B,
+$051E,$0521,$0524,$0527,$052A,$052D,$0530,$0533,$0536,$0539,$053C,$053E,$0541,$0544,$0547,$054A,
+$054D,$0550,$0553,$0556,$0559,$055C,$055F,$0562,$0565,$0568,$056B,$056E,$0571,$0574,$0577,$057A,
+$057D,$0580,$0583,$0586,$0589,$058C,$058F,$0592,$0595,$0598,$059B,$059E,$05A1,$05A4,$05A7,$05AA,
+$05AD,$05B0,$05B3,$05B6,$05B9,$05BC,$05BF,$05C2,$05C5,$05C8,$05CB,$05CE,$05D1,$05D4,$05D7,$05DA,
+$05DD,$05E0,$05E3,$05E6,$05E9,$05EC,$05EF,$05F2,$05F5,$05F8,$05FB,$05FE,$0601,$0604,$0607,$060A,
+$060D,$0611,$0614,$0617,$061A,$061D,$0620,$0623,$0626,$0629,$062C,$062F,$0632,$0635,$0638,$063B,
+$063E,$0641,$0645,$0648,$064B,$064E,$0651,$0654,$0657,$065A,$065D,$0660,$0663,$0666,$0669,$066C,
+$0670,$0673,$0676,$0679,$067C,$067F,$0682,$0685,$0688,$068B,$068E,$0691,$0695,$0698,$069B,$069E,
+$06A1,$06A4,$06A7,$06AA,$06AD,$06B0,$06B4,$06B7,$06BA,$06BD,$06C0,$06C3,$06C6,$06C9,$06CC,$06CF,
+$06D3,$06D6,$06D9,$06DC,$06DF,$06E2,$06E5,$06E8,$06EB,$06EF,$06F2,$06F5,$06F8,$06FB,$06FE,$0701,
+$0704,$0707,$070B,$070E,$0711,$0714,$0717,$071A,$071D,$0720,$0724,$0727,$072A,$072D,$0730,$0733,
+$0736,$0739,$073D,$0740,$0743,$0746,$0749,$074C,$074F,$0752,$0756,$0759,$075C,$075F,$0762,$0765,
+$0768,$076C,$076F,$0772,$0775,$0778,$077B,$077E,$0781,$0785,$0788,$078B,$078E,$0791,$0794,$0797,
+$079B,$079E,$07A1,$07A4,$07A7,$07AA,$07AD,$07B0,$07B4,$07B7,$07BA,$07BD,$07C0,$07C3,$07C6,$07CA,
+$07CD,$07D0,$07D3,$07D6,$07D9,$07DC,$07E0,$07E3,$07E6,$07E9,$07EC,$07EF,$07F2,$07F6,$07F9,$07FC
+);
+cosine_value : array[0..4095] of word = 
+(
+$0FFF,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,
+$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFC,$0FFC,$0FFC,
+$0FFC,$0FFC,$0FFC,$0FFC,$0FFB,$0FFB,$0FFB,$0FFB,$0FFB,$0FFA,$0FFA,$0FFA,$0FFA,$0FFA,$0FF9,$0FF9,
+$0FF9,$0FF9,$0FF8,$0FF8,$0FF8,$0FF8,$0FF7,$0FF7,$0FF7,$0FF7,$0FF6,$0FF6,$0FF6,$0FF6,$0FF5,$0FF5,
+$0FF5,$0FF4,$0FF4,$0FF4,$0FF3,$0FF3,$0FF3,$0FF2,$0FF2,$0FF2,$0FF1,$0FF1,$0FF1,$0FF0,$0FF0,$0FEF,
+$0FEF,$0FEF,$0FEE,$0FEE,$0FEE,$0FED,$0FED,$0FEC,$0FEC,$0FEB,$0FEB,$0FEB,$0FEA,$0FEA,$0FE9,$0FE9,
+$0FE8,$0FE8,$0FE7,$0FE7,$0FE6,$0FE6,$0FE5,$0FE5,$0FE4,$0FE4,$0FE3,$0FE3,$0FE2,$0FE2,$0FE1,$0FE1,
+$0FE0,$0FE0,$0FDF,$0FDF,$0FDE,$0FDE,$0FDD,$0FDC,$0FDC,$0FDB,$0FDB,$0FDA,$0FDA,$0FD9,$0FD8,$0FD8,
+$0FD7,$0FD7,$0FD6,$0FD5,$0FD5,$0FD4,$0FD3,$0FD3,$0FD2,$0FD1,$0FD1,$0FD0,$0FCF,$0FCF,$0FCE,$0FCD,
+$0FCD,$0FCC,$0FCB,$0FCB,$0FCA,$0FC9,$0FC9,$0FC8,$0FC7,$0FC6,$0FC6,$0FC5,$0FC4,$0FC3,$0FC3,$0FC2,
+$0FC1,$0FC0,$0FC0,$0FBF,$0FBE,$0FBD,$0FBC,$0FBC,$0FBB,$0FBA,$0FB9,$0FB8,$0FB8,$0FB7,$0FB6,$0FB5,
+$0FB4,$0FB3,$0FB3,$0FB2,$0FB1,$0FB0,$0FAF,$0FAE,$0FAD,$0FAD,$0FAC,$0FAB,$0FAA,$0FA9,$0FA8,$0FA7,
+$0FA6,$0FA5,$0FA5,$0FA4,$0FA3,$0FA2,$0FA1,$0FA0,$0F9F,$0F9E,$0F9D,$0F9C,$0F9B,$0F9A,$0F99,$0F98,
+$0F97,$0F96,$0F95,$0F94,$0F93,$0F92,$0F91,$0F90,$0F8F,$0F8E,$0F8D,$0F8C,$0F8B,$0F8A,$0F89,$0F88,
+$0F87,$0F86,$0F85,$0F84,$0F83,$0F81,$0F80,$0F7F,$0F7E,$0F7D,$0F7C,$0F7B,$0F7A,$0F79,$0F78,$0F76,
+$0F75,$0F74,$0F73,$0F72,$0F71,$0F70,$0F6E,$0F6D,$0F6C,$0F6B,$0F6A,$0F69,$0F67,$0F66,$0F65,$0F64,
+$0F63,$0F61,$0F60,$0F5F,$0F5E,$0F5D,$0F5B,$0F5A,$0F59,$0F58,$0F56,$0F55,$0F54,$0F53,$0F51,$0F50,
+$0F4F,$0F4E,$0F4C,$0F4B,$0F4A,$0F48,$0F47,$0F46,$0F45,$0F43,$0F42,$0F41,$0F3F,$0F3E,$0F3D,$0F3B,
+$0F3A,$0F39,$0F37,$0F36,$0F35,$0F33,$0F32,$0F30,$0F2F,$0F2E,$0F2C,$0F2B,$0F29,$0F28,$0F27,$0F25,
+$0F24,$0F22,$0F21,$0F20,$0F1E,$0F1D,$0F1B,$0F1A,$0F18,$0F17,$0F16,$0F14,$0F13,$0F11,$0F10,$0F0E,
+$0F0D,$0F0B,$0F0A,$0F08,$0F07,$0F05,$0F04,$0F02,$0F01,$0EFF,$0EFE,$0EFC,$0EFB,$0EF9,$0EF8,$0EF6,
+$0EF5,$0EF3,$0EF1,$0EF0,$0EEE,$0EED,$0EEB,$0EEA,$0EE8,$0EE6,$0EE5,$0EE3,$0EE2,$0EE0,$0EDE,$0EDD,
+$0EDB,$0EDA,$0ED8,$0ED6,$0ED5,$0ED3,$0ED1,$0ED0,$0ECE,$0ECD,$0ECB,$0EC9,$0EC8,$0EC6,$0EC4,$0EC3,
+$0EC1,$0EBF,$0EBD,$0EBC,$0EBA,$0EB8,$0EB7,$0EB5,$0EB3,$0EB2,$0EB0,$0EAE,$0EAC,$0EAB,$0EA9,$0EA7,
+$0EA5,$0EA4,$0EA2,$0EA0,$0E9E,$0E9D,$0E9B,$0E99,$0E97,$0E96,$0E94,$0E92,$0E90,$0E8E,$0E8D,$0E8B,
+$0E89,$0E87,$0E85,$0E84,$0E82,$0E80,$0E7E,$0E7C,$0E7A,$0E79,$0E77,$0E75,$0E73,$0E71,$0E6F,$0E6D,
+$0E6C,$0E6A,$0E68,$0E66,$0E64,$0E62,$0E60,$0E5E,$0E5C,$0E5B,$0E59,$0E57,$0E55,$0E53,$0E51,$0E4F,
+$0E4D,$0E4B,$0E49,$0E47,$0E45,$0E43,$0E41,$0E40,$0E3E,$0E3C,$0E3A,$0E38,$0E36,$0E34,$0E32,$0E30,
+$0E2E,$0E2C,$0E2A,$0E28,$0E26,$0E24,$0E22,$0E20,$0E1E,$0E1C,$0E1A,$0E18,$0E16,$0E14,$0E11,$0E0F,
+$0E0D,$0E0B,$0E09,$0E07,$0E05,$0E03,$0E01,$0DFF,$0DFD,$0DFB,$0DF9,$0DF7,$0DF5,$0DF2,$0DF0,$0DEE,
+$0DEC,$0DEA,$0DE8,$0DE6,$0DE4,$0DE2,$0DDF,$0DDD,$0DDB,$0DD9,$0DD7,$0DD5,$0DD3,$0DD0,$0DCE,$0DCC,
+$0DCA,$0DC8,$0DC6,$0DC3,$0DC1,$0DBF,$0DBD,$0DBB,$0DB8,$0DB6,$0DB4,$0DB2,$0DB0,$0DAD,$0DAB,$0DA9,
+$0DA7,$0DA5,$0DA2,$0DA0,$0D9E,$0D9C,$0D99,$0D97,$0D95,$0D93,$0D90,$0D8E,$0D8C,$0D8A,$0D87,$0D85,
+$0D83,$0D81,$0D7E,$0D7C,$0D7A,$0D77,$0D75,$0D73,$0D71,$0D6E,$0D6C,$0D6A,$0D67,$0D65,$0D63,$0D60,
+$0D5E,$0D5C,$0D59,$0D57,$0D55,$0D52,$0D50,$0D4E,$0D4B,$0D49,$0D47,$0D44,$0D42,$0D3F,$0D3D,$0D3B,
+$0D38,$0D36,$0D34,$0D31,$0D2F,$0D2C,$0D2A,$0D28,$0D25,$0D23,$0D20,$0D1E,$0D1C,$0D19,$0D17,$0D14,
+$0D12,$0D0F,$0D0D,$0D0B,$0D08,$0D06,$0D03,$0D01,$0CFE,$0CFC,$0CF9,$0CF7,$0CF5,$0CF2,$0CF0,$0CED,
+$0CEB,$0CE8,$0CE6,$0CE3,$0CE1,$0CDE,$0CDC,$0CD9,$0CD7,$0CD4,$0CD2,$0CCF,$0CCD,$0CCA,$0CC8,$0CC5,
+$0CC3,$0CC0,$0CBE,$0CBB,$0CB9,$0CB6,$0CB4,$0CB1,$0CAE,$0CAC,$0CA9,$0CA7,$0CA4,$0CA2,$0C9F,$0C9D,
+$0C9A,$0C97,$0C95,$0C92,$0C90,$0C8D,$0C8B,$0C88,$0C85,$0C83,$0C80,$0C7E,$0C7B,$0C78,$0C76,$0C73,
+$0C71,$0C6E,$0C6B,$0C69,$0C66,$0C63,$0C61,$0C5E,$0C5C,$0C59,$0C56,$0C54,$0C51,$0C4E,$0C4C,$0C49,
+$0C46,$0C44,$0C41,$0C3E,$0C3C,$0C39,$0C36,$0C34,$0C31,$0C2E,$0C2C,$0C29,$0C26,$0C24,$0C21,$0C1E,
+$0C1C,$0C19,$0C16,$0C14,$0C11,$0C0E,$0C0B,$0C09,$0C06,$0C03,$0C01,$0BFE,$0BFB,$0BF8,$0BF6,$0BF3,
+$0BF0,$0BED,$0BEB,$0BE8,$0BE5,$0BE3,$0BE0,$0BDD,$0BDA,$0BD8,$0BD5,$0BD2,$0BCF,$0BCC,$0BCA,$0BC7,
+$0BC4,$0BC1,$0BBF,$0BBC,$0BB9,$0BB6,$0BB4,$0BB1,$0BAE,$0BAB,$0BA8,$0BA6,$0BA3,$0BA0,$0B9D,$0B9A,
+$0B98,$0B95,$0B92,$0B8F,$0B8C,$0B8A,$0B87,$0B84,$0B81,$0B7E,$0B7B,$0B79,$0B76,$0B73,$0B70,$0B6D,
+$0B6A,$0B68,$0B65,$0B62,$0B5F,$0B5C,$0B59,$0B56,$0B54,$0B51,$0B4E,$0B4B,$0B48,$0B45,$0B42,$0B40,
+$0B3D,$0B3A,$0B37,$0B34,$0B31,$0B2E,$0B2B,$0B29,$0B26,$0B23,$0B20,$0B1D,$0B1A,$0B17,$0B14,$0B11,
+$0B0F,$0B0C,$0B09,$0B06,$0B03,$0B00,$0AFD,$0AFA,$0AF7,$0AF4,$0AF1,$0AEF,$0AEC,$0AE9,$0AE6,$0AE3,
+$0AE0,$0ADD,$0ADA,$0AD7,$0AD4,$0AD1,$0ACE,$0ACB,$0AC8,$0AC5,$0AC2,$0AC0,$0ABD,$0ABA,$0AB7,$0AB4,
+$0AB1,$0AAE,$0AAB,$0AA8,$0AA5,$0AA2,$0A9F,$0A9C,$0A99,$0A96,$0A93,$0A90,$0A8D,$0A8A,$0A87,$0A84,
+$0A81,$0A7E,$0A7B,$0A78,$0A75,$0A72,$0A6F,$0A6C,$0A69,$0A66,$0A63,$0A60,$0A5D,$0A5A,$0A57,$0A54,
+$0A51,$0A4E,$0A4B,$0A48,$0A45,$0A42,$0A3F,$0A3C,$0A39,$0A36,$0A33,$0A30,$0A2D,$0A2A,$0A27,$0A24,
+$0A21,$0A1E,$0A1B,$0A18,$0A15,$0A12,$0A0F,$0A0C,$0A09,$0A06,$0A03,$0A00,$09FD,$09FA,$09F7,$09F4,
+$09F1,$09ED,$09EA,$09E7,$09E4,$09E1,$09DE,$09DB,$09D8,$09D5,$09D2,$09CF,$09CC,$09C9,$09C6,$09C3,
+$09C0,$09BD,$09B9,$09B6,$09B3,$09B0,$09AD,$09AA,$09A7,$09A4,$09A1,$099E,$099B,$0998,$0995,$0992,
+$098E,$098B,$0988,$0985,$0982,$097F,$097C,$0979,$0976,$0973,$0970,$096D,$0969,$0966,$0963,$0960,
+$095D,$095A,$0957,$0954,$0951,$094E,$094A,$0947,$0944,$0941,$093E,$093B,$0938,$0935,$0932,$092F,
+$092B,$0928,$0925,$0922,$091F,$091C,$0919,$0916,$0913,$090F,$090C,$0909,$0906,$0903,$0900,$08FD,
+$08FA,$08F7,$08F3,$08F0,$08ED,$08EA,$08E7,$08E4,$08E1,$08DE,$08DA,$08D7,$08D4,$08D1,$08CE,$08CB,
+$08C8,$08C5,$08C1,$08BE,$08BB,$08B8,$08B5,$08B2,$08AF,$08AC,$08A8,$08A5,$08A2,$089F,$089C,$0899,
+$0896,$0892,$088F,$088C,$0889,$0886,$0883,$0880,$087D,$0879,$0876,$0873,$0870,$086D,$086A,$0867,
+$0863,$0860,$085D,$085A,$0857,$0854,$0851,$084E,$084A,$0847,$0844,$0841,$083E,$083B,$0838,$0834,
+$0831,$082E,$082B,$0828,$0825,$0822,$081E,$081B,$0818,$0815,$0812,$080F,$080C,$0808,$0805,$0802,
+$0800,$07FC,$07F9,$07F6,$07F2,$07EF,$07EC,$07E9,$07E6,$07E3,$07E0,$07DC,$07D9,$07D6,$07D3,$07D0,
+$07CD,$07CA,$07C6,$07C3,$07C0,$07BD,$07BA,$07B7,$07B4,$07B0,$07AD,$07AA,$07A7,$07A4,$07A1,$079E,
+$079B,$0797,$0794,$0791,$078E,$078B,$0788,$0785,$0781,$077E,$077B,$0778,$0775,$0772,$076F,$076C,
+$0768,$0765,$0762,$075F,$075C,$0759,$0756,$0752,$074F,$074C,$0749,$0746,$0743,$0740,$073D,$0739,
+$0736,$0733,$0730,$072D,$072A,$0727,$0724,$0720,$071D,$071A,$0717,$0714,$0711,$070E,$070B,$0707,
+$0704,$0701,$06FE,$06FB,$06F8,$06F5,$06F2,$06EF,$06EB,$06E8,$06E5,$06E2,$06DF,$06DC,$06D9,$06D6,
+$06D3,$06CF,$06CC,$06C9,$06C6,$06C3,$06C0,$06BD,$06BA,$06B7,$06B4,$06B0,$06AD,$06AA,$06A7,$06A4,
+$06A1,$069E,$069B,$0698,$0695,$0691,$068E,$068B,$0688,$0685,$0682,$067F,$067C,$0679,$0676,$0673,
+$0670,$066C,$0669,$0666,$0663,$0660,$065D,$065A,$0657,$0654,$0651,$064E,$064B,$0648,$0645,$0641,
+$063E,$063B,$0638,$0635,$0632,$062F,$062C,$0629,$0626,$0623,$0620,$061D,$061A,$0617,$0614,$0611,
+$060D,$060A,$0607,$0604,$0601,$05FE,$05FB,$05F8,$05F5,$05F2,$05EF,$05EC,$05E9,$05E6,$05E3,$05E0,
+$05DD,$05DA,$05D7,$05D4,$05D1,$05CE,$05CB,$05C8,$05C5,$05C2,$05BF,$05BC,$05B9,$05B6,$05B3,$05B0,
+$05AD,$05AA,$05A7,$05A4,$05A1,$059E,$059B,$0598,$0595,$0592,$058F,$058C,$0589,$0586,$0583,$0580,
+$057D,$057A,$0577,$0574,$0571,$056E,$056B,$0568,$0565,$0562,$055F,$055C,$0559,$0556,$0553,$0550,
+$054D,$054A,$0547,$0544,$0541,$053E,$053C,$0539,$0536,$0533,$0530,$052D,$052A,$0527,$0524,$0521,
+$051E,$051B,$0518,$0515,$0512,$050F,$050D,$050A,$0507,$0504,$0501,$04FE,$04FB,$04F8,$04F5,$04F2,
+$04EF,$04ED,$04EA,$04E7,$04E4,$04E1,$04DE,$04DB,$04D8,$04D5,$04D3,$04D0,$04CD,$04CA,$04C7,$04C4,
+$04C1,$04BE,$04BC,$04B9,$04B6,$04B3,$04B0,$04AD,$04AA,$04A8,$04A5,$04A2,$049F,$049C,$0499,$0496,
+$0494,$0491,$048E,$048B,$0488,$0485,$0483,$0480,$047D,$047A,$0477,$0474,$0472,$046F,$046C,$0469,
+$0466,$0464,$0461,$045E,$045B,$0458,$0456,$0453,$0450,$044D,$044A,$0448,$0445,$0442,$043F,$043D,
+$043A,$0437,$0434,$0432,$042F,$042C,$0429,$0426,$0424,$0421,$041E,$041B,$0419,$0416,$0413,$0411,
+$040E,$040B,$0408,$0406,$0403,$0400,$03FD,$03FB,$03F8,$03F5,$03F3,$03F0,$03ED,$03EA,$03E8,$03E5,
+$03E2,$03E0,$03DD,$03DA,$03D8,$03D5,$03D2,$03D0,$03CD,$03CA,$03C8,$03C5,$03C2,$03C0,$03BD,$03BA,
+$03B8,$03B5,$03B2,$03B0,$03AD,$03AA,$03A8,$03A5,$03A2,$03A0,$039D,$039B,$0398,$0395,$0393,$0390,
+$038D,$038B,$0388,$0386,$0383,$0380,$037E,$037B,$0379,$0376,$0373,$0371,$036E,$036C,$0369,$0367,
+$0364,$0361,$035F,$035C,$035A,$0357,$0355,$0352,$0350,$034D,$034A,$0348,$0345,$0343,$0340,$033E,
+$033B,$0339,$0336,$0334,$0331,$032F,$032C,$032A,$0327,$0325,$0322,$0320,$031D,$031B,$0318,$0316,
+$0313,$0311,$030E,$030C,$0309,$0307,$0305,$0302,$0300,$02FD,$02FB,$02F8,$02F6,$02F3,$02F1,$02EF,
+$02EC,$02EA,$02E7,$02E5,$02E2,$02E0,$02DE,$02DB,$02D9,$02D6,$02D4,$02D2,$02CF,$02CD,$02CA,$02C8,
+$02C6,$02C3,$02C1,$02BF,$02BC,$02BA,$02B7,$02B5,$02B3,$02B0,$02AE,$02AC,$02A9,$02A7,$02A5,$02A2,
+$02A0,$029E,$029B,$0299,$0297,$0294,$0292,$0290,$028D,$028B,$0289,$0287,$0284,$0282,$0280,$027D,
+$027B,$0279,$0277,$0274,$0272,$0270,$026E,$026B,$0269,$0267,$0265,$0262,$0260,$025E,$025C,$0259,
+$0257,$0255,$0253,$0251,$024E,$024C,$024A,$0248,$0246,$0243,$0241,$023F,$023D,$023B,$0238,$0236,
+$0234,$0232,$0230,$022E,$022B,$0229,$0227,$0225,$0223,$0221,$021F,$021C,$021A,$0218,$0216,$0214,
+$0212,$0210,$020E,$020C,$0209,$0207,$0205,$0203,$0201,$01FF,$01FD,$01FB,$01F9,$01F7,$01F5,$01F3,
+$01F1,$01EF,$01ED,$01EA,$01E8,$01E6,$01E4,$01E2,$01E0,$01DE,$01DC,$01DA,$01D8,$01D6,$01D4,$01D2,
+$01D0,$01CE,$01CC,$01CA,$01C8,$01C6,$01C4,$01C2,$01C0,$01BE,$01BD,$01BB,$01B9,$01B7,$01B5,$01B3,
+$01B1,$01AF,$01AD,$01AB,$01A9,$01A7,$01A5,$01A3,$01A2,$01A0,$019E,$019C,$019A,$0198,$0196,$0194,
+$0192,$0191,$018F,$018D,$018B,$0189,$0187,$0185,$0184,$0182,$0180,$017E,$017C,$017A,$0179,$0177,
+$0175,$0173,$0171,$0170,$016E,$016C,$016A,$0168,$0167,$0165,$0163,$0161,$0160,$015E,$015C,$015A,
+$0159,$0157,$0155,$0153,$0152,$0150,$014E,$014C,$014B,$0149,$0147,$0146,$0144,$0142,$0141,$013F,
+$013D,$013B,$013A,$0138,$0136,$0135,$0133,$0131,$0130,$012E,$012D,$012B,$0129,$0128,$0126,$0124,
+$0123,$0121,$0120,$011E,$011C,$011B,$0119,$0118,$0116,$0114,$0113,$0111,$0110,$010E,$010D,$010B,
+$0109,$0108,$0106,$0105,$0103,$0102,$0100,$00FF,$00FD,$00FC,$00FA,$00F9,$00F7,$00F6,$00F4,$00F3,
+$00F1,$00F0,$00EE,$00ED,$00EB,$00EA,$00E8,$00E7,$00E6,$00E4,$00E3,$00E1,$00E0,$00DE,$00DD,$00DC,
+$00DA,$00D9,$00D7,$00D6,$00D5,$00D3,$00D2,$00D0,$00CF,$00CE,$00CC,$00CB,$00C9,$00C8,$00C7,$00C5,
+$00C4,$00C3,$00C1,$00C0,$00BF,$00BD,$00BC,$00BB,$00B9,$00B8,$00B7,$00B6,$00B4,$00B3,$00B2,$00B0,
+$00AF,$00AE,$00AD,$00AB,$00AA,$00A9,$00A8,$00A6,$00A5,$00A4,$00A3,$00A1,$00A0,$009F,$009E,$009D,
+$009B,$009A,$0099,$0098,$0097,$0095,$0094,$0093,$0092,$0091,$0090,$008E,$008D,$008C,$008B,$008A,
+$0089,$0088,$0086,$0085,$0084,$0083,$0082,$0081,$0080,$007F,$007E,$007D,$007B,$007A,$0079,$0078,
+$0077,$0076,$0075,$0074,$0073,$0072,$0071,$0070,$006F,$006E,$006D,$006C,$006B,$006A,$0069,$0068,
+$0067,$0066,$0065,$0064,$0063,$0062,$0061,$0060,$005F,$005E,$005D,$005C,$005B,$005A,$0059,$0059,
+$0058,$0057,$0056,$0055,$0054,$0053,$0052,$0051,$0051,$0050,$004F,$004E,$004D,$004C,$004B,$004B,
+$004A,$0049,$0048,$0047,$0046,$0046,$0045,$0044,$0043,$0042,$0042,$0041,$0040,$003F,$003E,$003E,
+$003D,$003C,$003B,$003B,$003A,$0039,$0038,$0038,$0037,$0036,$0035,$0035,$0034,$0033,$0033,$0032,
+$0031,$0031,$0030,$002F,$002F,$002E,$002D,$002D,$002C,$002B,$002B,$002A,$0029,$0029,$0028,$0027,
+$0027,$0026,$0026,$0025,$0024,$0024,$0023,$0023,$0022,$0022,$0021,$0020,$0020,$001F,$001F,$001E,
+$001E,$001D,$001D,$001C,$001C,$001B,$001B,$001A,$001A,$0019,$0019,$0018,$0018,$0017,$0017,$0016,
+$0016,$0015,$0015,$0014,$0014,$0013,$0013,$0013,$0012,$0012,$0011,$0011,$0010,$0010,$0010,$000F,
+$000F,$000F,$000E,$000E,$000D,$000D,$000D,$000C,$000C,$000C,$000B,$000B,$000B,$000A,$000A,$000A,
+$0009,$0009,$0009,$0008,$0008,$0008,$0008,$0007,$0007,$0007,$0007,$0006,$0006,$0006,$0006,$0005,
+$0005,$0005,$0005,$0004,$0004,$0004,$0004,$0004,$0003,$0003,$0003,$0003,$0003,$0002,$0002,$0002,
+$0002,$0002,$0002,$0002,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0000,$0000,$0000,$0000,
+$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,
+$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000,
+$0000,$0000,$0000,$0000,$0000,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0001,$0002,$0002,$0002,
+$0002,$0002,$0002,$0002,$0003,$0003,$0003,$0003,$0003,$0004,$0004,$0004,$0004,$0004,$0005,$0005,
+$0005,$0005,$0006,$0006,$0006,$0006,$0007,$0007,$0007,$0007,$0008,$0008,$0008,$0008,$0009,$0009,
+$0009,$000A,$000A,$000A,$000B,$000B,$000B,$000C,$000C,$000C,$000D,$000D,$000D,$000E,$000E,$000F,
+$000F,$000F,$0010,$0010,$0010,$0011,$0011,$0012,$0012,$0013,$0013,$0013,$0014,$0014,$0015,$0015,
+$0016,$0016,$0017,$0017,$0018,$0018,$0019,$0019,$001A,$001A,$001B,$001B,$001C,$001C,$001D,$001D,
+$001E,$001E,$001F,$001F,$0020,$0020,$0021,$0022,$0022,$0023,$0023,$0024,$0024,$0025,$0026,$0026,
+$0027,$0027,$0028,$0029,$0029,$002A,$002B,$002B,$002C,$002D,$002D,$002E,$002F,$002F,$0030,$0031,
+$0031,$0032,$0033,$0033,$0034,$0035,$0035,$0036,$0037,$0038,$0038,$0039,$003A,$003B,$003B,$003C,
+$003D,$003E,$003E,$003F,$0040,$0041,$0042,$0042,$0043,$0044,$0045,$0046,$0046,$0047,$0048,$0049,
+$004A,$004B,$004B,$004C,$004D,$004E,$004F,$0050,$0051,$0051,$0052,$0053,$0054,$0055,$0056,$0057,
+$0058,$0059,$0059,$005A,$005B,$005C,$005D,$005E,$005F,$0060,$0061,$0062,$0063,$0064,$0065,$0066,
+$0067,$0068,$0069,$006A,$006B,$006C,$006D,$006E,$006F,$0070,$0071,$0072,$0073,$0074,$0075,$0076,
+$0077,$0078,$0079,$007A,$007B,$007D,$007E,$007F,$0080,$0081,$0082,$0083,$0084,$0085,$0086,$0088,
+$0089,$008A,$008B,$008C,$008D,$008E,$0090,$0091,$0092,$0093,$0094,$0095,$0097,$0098,$0099,$009A,
+$009B,$009D,$009E,$009F,$00A0,$00A1,$00A3,$00A4,$00A5,$00A6,$00A8,$00A9,$00AA,$00AB,$00AD,$00AE,
+$00AF,$00B0,$00B2,$00B3,$00B4,$00B6,$00B7,$00B8,$00B9,$00BB,$00BC,$00BD,$00BF,$00C0,$00C1,$00C3,
+$00C4,$00C5,$00C7,$00C8,$00C9,$00CB,$00CC,$00CE,$00CF,$00D0,$00D2,$00D3,$00D5,$00D6,$00D7,$00D9,
+$00DA,$00DC,$00DD,$00DE,$00E0,$00E1,$00E3,$00E4,$00E6,$00E7,$00E8,$00EA,$00EB,$00ED,$00EE,$00F0,
+$00F1,$00F3,$00F4,$00F6,$00F7,$00F9,$00FA,$00FC,$00FD,$00FF,$0100,$0102,$0103,$0105,$0106,$0108,
+$0109,$010B,$010D,$010E,$0110,$0111,$0113,$0114,$0116,$0118,$0119,$011B,$011C,$011E,$0120,$0121,
+$0123,$0124,$0126,$0128,$0129,$012B,$012D,$012E,$0130,$0131,$0133,$0135,$0136,$0138,$013A,$013B,
+$013D,$013F,$0141,$0142,$0144,$0146,$0147,$0149,$014B,$014C,$014E,$0150,$0152,$0153,$0155,$0157,
+$0159,$015A,$015C,$015E,$0160,$0161,$0163,$0165,$0167,$0168,$016A,$016C,$016E,$0170,$0171,$0173,
+$0175,$0177,$0179,$017A,$017C,$017E,$0180,$0182,$0184,$0185,$0187,$0189,$018B,$018D,$018F,$0191,
+$0192,$0194,$0196,$0198,$019A,$019C,$019E,$01A0,$01A2,$01A3,$01A5,$01A7,$01A9,$01AB,$01AD,$01AF,
+$01B1,$01B3,$01B5,$01B7,$01B9,$01BB,$01BD,$01BE,$01C0,$01C2,$01C4,$01C6,$01C8,$01CA,$01CC,$01CE,
+$01D0,$01D2,$01D4,$01D6,$01D8,$01DA,$01DC,$01DE,$01E0,$01E2,$01E4,$01E6,$01E8,$01EA,$01ED,$01EF,
+$01F1,$01F3,$01F5,$01F7,$01F9,$01FB,$01FD,$01FF,$0201,$0203,$0205,$0207,$0209,$020C,$020E,$0210,
+$0212,$0214,$0216,$0218,$021A,$021C,$021F,$0221,$0223,$0225,$0227,$0229,$022B,$022E,$0230,$0232,
+$0234,$0236,$0238,$023B,$023D,$023F,$0241,$0243,$0246,$0248,$024A,$024C,$024E,$0251,$0253,$0255,
+$0257,$0259,$025C,$025E,$0260,$0262,$0265,$0267,$0269,$026B,$026E,$0270,$0272,$0274,$0277,$0279,
+$027B,$027D,$0280,$0282,$0284,$0287,$0289,$028B,$028D,$0290,$0292,$0294,$0297,$0299,$029B,$029E,
+$02A0,$02A2,$02A5,$02A7,$02A9,$02AC,$02AE,$02B0,$02B3,$02B5,$02B7,$02BA,$02BC,$02BF,$02C1,$02C3,
+$02C6,$02C8,$02CA,$02CD,$02CF,$02D2,$02D4,$02D6,$02D9,$02DB,$02DE,$02E0,$02E2,$02E5,$02E7,$02EA,
+$02EC,$02EF,$02F1,$02F3,$02F6,$02F8,$02FB,$02FD,$0300,$0302,$0305,$0307,$0309,$030C,$030E,$0311,
+$0313,$0316,$0318,$031B,$031D,$0320,$0322,$0325,$0327,$032A,$032C,$032F,$0331,$0334,$0336,$0339,
+$033B,$033E,$0340,$0343,$0345,$0348,$034A,$034D,$0350,$0352,$0355,$0357,$035A,$035C,$035F,$0361,
+$0364,$0367,$0369,$036C,$036E,$0371,$0373,$0376,$0379,$037B,$037E,$0380,$0383,$0386,$0388,$038B,
+$038D,$0390,$0393,$0395,$0398,$039B,$039D,$03A0,$03A2,$03A5,$03A8,$03AA,$03AD,$03B0,$03B2,$03B5,
+$03B8,$03BA,$03BD,$03C0,$03C2,$03C5,$03C8,$03CA,$03CD,$03D0,$03D2,$03D5,$03D8,$03DA,$03DD,$03E0,
+$03E2,$03E5,$03E8,$03EA,$03ED,$03F0,$03F3,$03F5,$03F8,$03FB,$03FD,$0400,$0403,$0406,$0408,$040B,
+$040E,$0411,$0413,$0416,$0419,$041B,$041E,$0421,$0424,$0426,$0429,$042C,$042F,$0432,$0434,$0437,
+$043A,$043D,$043F,$0442,$0445,$0448,$044A,$044D,$0450,$0453,$0456,$0458,$045B,$045E,$0461,$0464,
+$0466,$0469,$046C,$046F,$0472,$0474,$0477,$047A,$047D,$0480,$0483,$0485,$0488,$048B,$048E,$0491,
+$0494,$0496,$0499,$049C,$049F,$04A2,$04A5,$04A8,$04AA,$04AD,$04B0,$04B3,$04B6,$04B9,$04BC,$04BE,
+$04C1,$04C4,$04C7,$04CA,$04CD,$04D0,$04D3,$04D5,$04D8,$04DB,$04DE,$04E1,$04E4,$04E7,$04EA,$04ED,
+$04EF,$04F2,$04F5,$04F8,$04FB,$04FE,$0501,$0504,$0507,$050A,$050D,$050F,$0512,$0515,$0518,$051B,
+$051E,$0521,$0524,$0527,$052A,$052D,$0530,$0533,$0536,$0539,$053C,$053E,$0541,$0544,$0547,$054A,
+$054D,$0550,$0553,$0556,$0559,$055C,$055F,$0562,$0565,$0568,$056B,$056E,$0571,$0574,$0577,$057A,
+$057D,$0580,$0583,$0586,$0589,$058C,$058F,$0592,$0595,$0598,$059B,$059E,$05A1,$05A4,$05A7,$05AA,
+$05AD,$05B0,$05B3,$05B6,$05B9,$05BC,$05BF,$05C2,$05C5,$05C8,$05CB,$05CE,$05D1,$05D4,$05D7,$05DA,
+$05DD,$05E0,$05E3,$05E6,$05E9,$05EC,$05EF,$05F2,$05F5,$05F8,$05FB,$05FE,$0601,$0604,$0607,$060A,
+$060D,$0611,$0614,$0617,$061A,$061D,$0620,$0623,$0626,$0629,$062C,$062F,$0632,$0635,$0638,$063B,
+$063E,$0641,$0645,$0648,$064B,$064E,$0651,$0654,$0657,$065A,$065D,$0660,$0663,$0666,$0669,$066C,
+$0670,$0673,$0676,$0679,$067C,$067F,$0682,$0685,$0688,$068B,$068E,$0691,$0695,$0698,$069B,$069E,
+$06A1,$06A4,$06A7,$06AA,$06AD,$06B0,$06B4,$06B7,$06BA,$06BD,$06C0,$06C3,$06C6,$06C9,$06CC,$06CF,
+$06D3,$06D6,$06D9,$06DC,$06DF,$06E2,$06E5,$06E8,$06EB,$06EF,$06F2,$06F5,$06F8,$06FB,$06FE,$0701,
+$0704,$0707,$070B,$070E,$0711,$0714,$0717,$071A,$071D,$0720,$0724,$0727,$072A,$072D,$0730,$0733,
+$0736,$0739,$073D,$0740,$0743,$0746,$0749,$074C,$074F,$0752,$0756,$0759,$075C,$075F,$0762,$0765,
+$0768,$076C,$076F,$0772,$0775,$0778,$077B,$077E,$0781,$0785,$0788,$078B,$078E,$0791,$0794,$0797,
+$079B,$079E,$07A1,$07A4,$07A7,$07AA,$07AD,$07B0,$07B4,$07B7,$07BA,$07BD,$07C0,$07C3,$07C6,$07CA,
+$07CD,$07D0,$07D3,$07D6,$07D9,$07DC,$07E0,$07E3,$07E6,$07E9,$07EC,$07EF,$07F2,$07F6,$07F9,$07FC,
+$0800,$0802,$0805,$0808,$080C,$080F,$0812,$0815,$0818,$081B,$081E,$0822,$0825,$0828,$082B,$082E,
+$0831,$0834,$0838,$083B,$083E,$0841,$0844,$0847,$084A,$084E,$0851,$0854,$0857,$085A,$085D,$0860,
+$0863,$0867,$086A,$086D,$0870,$0873,$0876,$0879,$087D,$0880,$0883,$0886,$0889,$088C,$088F,$0892,
+$0896,$0899,$089C,$089F,$08A2,$08A5,$08A8,$08AC,$08AF,$08B2,$08B5,$08B8,$08BB,$08BE,$08C1,$08C5,
+$08C8,$08CB,$08CE,$08D1,$08D4,$08D7,$08DA,$08DE,$08E1,$08E4,$08E7,$08EA,$08ED,$08F0,$08F3,$08F7,
+$08FA,$08FD,$0900,$0903,$0906,$0909,$090C,$090F,$0913,$0916,$0919,$091C,$091F,$0922,$0925,$0928,
+$092B,$092F,$0932,$0935,$0938,$093B,$093E,$0941,$0944,$0947,$094A,$094E,$0951,$0954,$0957,$095A,
+$095D,$0960,$0963,$0966,$0969,$096D,$0970,$0973,$0976,$0979,$097C,$097F,$0982,$0985,$0988,$098B,
+$098E,$0992,$0995,$0998,$099B,$099E,$09A1,$09A4,$09A7,$09AA,$09AD,$09B0,$09B3,$09B6,$09B9,$09BD,
+$09C0,$09C3,$09C6,$09C9,$09CC,$09CF,$09D2,$09D5,$09D8,$09DB,$09DE,$09E1,$09E4,$09E7,$09EA,$09ED,
+$09F1,$09F4,$09F7,$09FA,$09FD,$0A00,$0A03,$0A06,$0A09,$0A0C,$0A0F,$0A12,$0A15,$0A18,$0A1B,$0A1E,
+$0A21,$0A24,$0A27,$0A2A,$0A2D,$0A30,$0A33,$0A36,$0A39,$0A3C,$0A3F,$0A42,$0A45,$0A48,$0A4B,$0A4E,
+$0A51,$0A54,$0A57,$0A5A,$0A5D,$0A60,$0A63,$0A66,$0A69,$0A6C,$0A6F,$0A72,$0A75,$0A78,$0A7B,$0A7E,
+$0A81,$0A84,$0A87,$0A8A,$0A8D,$0A90,$0A93,$0A96,$0A99,$0A9C,$0A9F,$0AA2,$0AA5,$0AA8,$0AAB,$0AAE,
+$0AB1,$0AB4,$0AB7,$0ABA,$0ABD,$0AC0,$0AC2,$0AC5,$0AC8,$0ACB,$0ACE,$0AD1,$0AD4,$0AD7,$0ADA,$0ADD,
+$0AE0,$0AE3,$0AE6,$0AE9,$0AEC,$0AEF,$0AF1,$0AF4,$0AF7,$0AFA,$0AFD,$0B00,$0B03,$0B06,$0B09,$0B0C,
+$0B0F,$0B11,$0B14,$0B17,$0B1A,$0B1D,$0B20,$0B23,$0B26,$0B29,$0B2B,$0B2E,$0B31,$0B34,$0B37,$0B3A,
+$0B3D,$0B40,$0B42,$0B45,$0B48,$0B4B,$0B4E,$0B51,$0B54,$0B56,$0B59,$0B5C,$0B5F,$0B62,$0B65,$0B68,
+$0B6A,$0B6D,$0B70,$0B73,$0B76,$0B79,$0B7B,$0B7E,$0B81,$0B84,$0B87,$0B8A,$0B8C,$0B8F,$0B92,$0B95,
+$0B98,$0B9A,$0B9D,$0BA0,$0BA3,$0BA6,$0BA8,$0BAB,$0BAE,$0BB1,$0BB4,$0BB6,$0BB9,$0BBC,$0BBF,$0BC1,
+$0BC4,$0BC7,$0BCA,$0BCC,$0BCF,$0BD2,$0BD5,$0BD8,$0BDA,$0BDD,$0BE0,$0BE3,$0BE5,$0BE8,$0BEB,$0BED,
+$0BF0,$0BF3,$0BF6,$0BF8,$0BFB,$0BFE,$0C01,$0C03,$0C06,$0C09,$0C0B,$0C0E,$0C11,$0C14,$0C16,$0C19,
+$0C1C,$0C1E,$0C21,$0C24,$0C26,$0C29,$0C2C,$0C2E,$0C31,$0C34,$0C36,$0C39,$0C3C,$0C3E,$0C41,$0C44,
+$0C46,$0C49,$0C4C,$0C4E,$0C51,$0C54,$0C56,$0C59,$0C5C,$0C5E,$0C61,$0C63,$0C66,$0C69,$0C6B,$0C6E,
+$0C71,$0C73,$0C76,$0C78,$0C7B,$0C7E,$0C80,$0C83,$0C85,$0C88,$0C8B,$0C8D,$0C90,$0C92,$0C95,$0C97,
+$0C9A,$0C9D,$0C9F,$0CA2,$0CA4,$0CA7,$0CA9,$0CAC,$0CAE,$0CB1,$0CB4,$0CB6,$0CB9,$0CBB,$0CBE,$0CC0,
+$0CC3,$0CC5,$0CC8,$0CCA,$0CCD,$0CCF,$0CD2,$0CD4,$0CD7,$0CD9,$0CDC,$0CDE,$0CE1,$0CE3,$0CE6,$0CE8,
+$0CEB,$0CED,$0CF0,$0CF2,$0CF5,$0CF7,$0CF9,$0CFC,$0CFE,$0D01,$0D03,$0D06,$0D08,$0D0B,$0D0D,$0D0F,
+$0D12,$0D14,$0D17,$0D19,$0D1C,$0D1E,$0D20,$0D23,$0D25,$0D28,$0D2A,$0D2C,$0D2F,$0D31,$0D34,$0D36,
+$0D38,$0D3B,$0D3D,$0D3F,$0D42,$0D44,$0D47,$0D49,$0D4B,$0D4E,$0D50,$0D52,$0D55,$0D57,$0D59,$0D5C,
+$0D5E,$0D60,$0D63,$0D65,$0D67,$0D6A,$0D6C,$0D6E,$0D71,$0D73,$0D75,$0D77,$0D7A,$0D7C,$0D7E,$0D81,
+$0D83,$0D85,$0D87,$0D8A,$0D8C,$0D8E,$0D90,$0D93,$0D95,$0D97,$0D99,$0D9C,$0D9E,$0DA0,$0DA2,$0DA5,
+$0DA7,$0DA9,$0DAB,$0DAD,$0DB0,$0DB2,$0DB4,$0DB6,$0DB8,$0DBB,$0DBD,$0DBF,$0DC1,$0DC3,$0DC6,$0DC8,
+$0DCA,$0DCC,$0DCE,$0DD0,$0DD3,$0DD5,$0DD7,$0DD9,$0DDB,$0DDD,$0DDF,$0DE2,$0DE4,$0DE6,$0DE8,$0DEA,
+$0DEC,$0DEE,$0DF0,$0DF2,$0DF5,$0DF7,$0DF9,$0DFB,$0DFD,$0DFF,$0E01,$0E03,$0E05,$0E07,$0E09,$0E0B,
+$0E0D,$0E0F,$0E11,$0E14,$0E16,$0E18,$0E1A,$0E1C,$0E1E,$0E20,$0E22,$0E24,$0E26,$0E28,$0E2A,$0E2C,
+$0E2E,$0E30,$0E32,$0E34,$0E36,$0E38,$0E3A,$0E3C,$0E3E,$0E40,$0E41,$0E43,$0E45,$0E47,$0E49,$0E4B,
+$0E4D,$0E4F,$0E51,$0E53,$0E55,$0E57,$0E59,$0E5B,$0E5C,$0E5E,$0E60,$0E62,$0E64,$0E66,$0E68,$0E6A,
+$0E6C,$0E6D,$0E6F,$0E71,$0E73,$0E75,$0E77,$0E79,$0E7A,$0E7C,$0E7E,$0E80,$0E82,$0E84,$0E85,$0E87,
+$0E89,$0E8B,$0E8D,$0E8E,$0E90,$0E92,$0E94,$0E96,$0E97,$0E99,$0E9B,$0E9D,$0E9E,$0EA0,$0EA2,$0EA4,
+$0EA5,$0EA7,$0EA9,$0EAB,$0EAC,$0EAE,$0EB0,$0EB2,$0EB3,$0EB5,$0EB7,$0EB8,$0EBA,$0EBC,$0EBD,$0EBF,
+$0EC1,$0EC3,$0EC4,$0EC6,$0EC8,$0EC9,$0ECB,$0ECD,$0ECE,$0ED0,$0ED1,$0ED3,$0ED5,$0ED6,$0ED8,$0EDA,
+$0EDB,$0EDD,$0EDE,$0EE0,$0EE2,$0EE3,$0EE5,$0EE6,$0EE8,$0EEA,$0EEB,$0EED,$0EEE,$0EF0,$0EF1,$0EF3,
+$0EF5,$0EF6,$0EF8,$0EF9,$0EFB,$0EFC,$0EFE,$0EFF,$0F01,$0F02,$0F04,$0F05,$0F07,$0F08,$0F0A,$0F0B,
+$0F0D,$0F0E,$0F10,$0F11,$0F13,$0F14,$0F16,$0F17,$0F18,$0F1A,$0F1B,$0F1D,$0F1E,$0F20,$0F21,$0F22,
+$0F24,$0F25,$0F27,$0F28,$0F29,$0F2B,$0F2C,$0F2E,$0F2F,$0F30,$0F32,$0F33,$0F35,$0F36,$0F37,$0F39,
+$0F3A,$0F3B,$0F3D,$0F3E,$0F3F,$0F41,$0F42,$0F43,$0F45,$0F46,$0F47,$0F48,$0F4A,$0F4B,$0F4C,$0F4E,
+$0F4F,$0F50,$0F51,$0F53,$0F54,$0F55,$0F56,$0F58,$0F59,$0F5A,$0F5B,$0F5D,$0F5E,$0F5F,$0F60,$0F61,
+$0F63,$0F64,$0F65,$0F66,$0F67,$0F69,$0F6A,$0F6B,$0F6C,$0F6D,$0F6E,$0F70,$0F71,$0F72,$0F73,$0F74,
+$0F75,$0F76,$0F78,$0F79,$0F7A,$0F7B,$0F7C,$0F7D,$0F7E,$0F7F,$0F80,$0F81,$0F83,$0F84,$0F85,$0F86,
+$0F87,$0F88,$0F89,$0F8A,$0F8B,$0F8C,$0F8D,$0F8E,$0F8F,$0F90,$0F91,$0F92,$0F93,$0F94,$0F95,$0F96,
+$0F97,$0F98,$0F99,$0F9A,$0F9B,$0F9C,$0F9D,$0F9E,$0F9F,$0FA0,$0FA1,$0FA2,$0FA3,$0FA4,$0FA5,$0FA5,
+$0FA6,$0FA7,$0FA8,$0FA9,$0FAA,$0FAB,$0FAC,$0FAD,$0FAD,$0FAE,$0FAF,$0FB0,$0FB1,$0FB2,$0FB3,$0FB3,
+$0FB4,$0FB5,$0FB6,$0FB7,$0FB8,$0FB8,$0FB9,$0FBA,$0FBB,$0FBC,$0FBC,$0FBD,$0FBE,$0FBF,$0FC0,$0FC0,
+$0FC1,$0FC2,$0FC3,$0FC3,$0FC4,$0FC5,$0FC6,$0FC6,$0FC7,$0FC8,$0FC9,$0FC9,$0FCA,$0FCB,$0FCB,$0FCC,
+$0FCD,$0FCD,$0FCE,$0FCF,$0FCF,$0FD0,$0FD1,$0FD1,$0FD2,$0FD3,$0FD3,$0FD4,$0FD5,$0FD5,$0FD6,$0FD7,
+$0FD7,$0FD8,$0FD8,$0FD9,$0FDA,$0FDA,$0FDB,$0FDB,$0FDC,$0FDC,$0FDD,$0FDE,$0FDE,$0FDF,$0FDF,$0FE0,
+$0FE0,$0FE1,$0FE1,$0FE2,$0FE2,$0FE3,$0FE3,$0FE4,$0FE4,$0FE5,$0FE5,$0FE6,$0FE6,$0FE7,$0FE7,$0FE8,
+$0FE8,$0FE9,$0FE9,$0FEA,$0FEA,$0FEB,$0FEB,$0FEB,$0FEC,$0FEC,$0FED,$0FED,$0FEE,$0FEE,$0FEE,$0FEF,
+$0FEF,$0FEF,$0FF0,$0FF0,$0FF1,$0FF1,$0FF1,$0FF2,$0FF2,$0FF2,$0FF3,$0FF3,$0FF3,$0FF4,$0FF4,$0FF4,
+$0FF5,$0FF5,$0FF5,$0FF6,$0FF6,$0FF6,$0FF6,$0FF7,$0FF7,$0FF7,$0FF7,$0FF8,$0FF8,$0FF8,$0FF8,$0FF9,
+$0FF9,$0FF9,$0FF9,$0FFA,$0FFA,$0FFA,$0FFA,$0FFA,$0FFB,$0FFB,$0FFB,$0FFB,$0FFB,$0FFC,$0FFC,$0FFC,
+$0FFC,$0FFC,$0FFC,$0FFC,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFD,$0FFE,$0FFE,$0FFE,$0FFE,
+$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE,$0FFE
+);
+
+
+
+implementation
+
+{$R *.DFM}
+
+procedure TMainForm.FormCreate(Sender: TObject);
+var SimtekIni : TIniFile;
+    tmp : integer;
+begin
+  SimtekIni := TIniFile.Create('C:\Simtek.Ini');
+  With SimtekIni do
+    begin
+      // load the limit for the transmit and recieve windows
+    TxWinLimit         := ReadInteger(GENSec,  GenSecK01,  250);      //
+    RxWinLimit         := ReadInteger(GENSec,  GenSecK02,  250);      //
+    edtIPAddress.Text  := ReadString(InstSec,  InstSecK01, '192.168.136.90'); // {Set the default flags for startup          }
+    edtClientPort.Text := ReadString(InstSec,  InstSecK02, '51020');          //{Set the default flags for startup          }
+    IdUDPClient1.Port  := StrToInt(edtClientPort.Text);
+    end;
+  SimtekIni.Free;
+  TxPlace   := 1;
+  tmp       := TxWinLimit;
+  while tmp > 10 do
+    begin
+    tmp     := tmp div 10;
+    TxPlace := TxPlace + 1;
+    end;
+  tmp       := RxWinLimit;
+  while tmp > 10 do
+    begin
+    tmp     := tmp div 10;
+    RxPlace := RxPlace + 1;
+    end;
+  {---------------- ATTENTION ----------------------------------------------}
+  { initialize your variables here. DO NOT place them after the Port1click  }
+  { Routine as the communications events will be active and you may get an  }
+  { invalid value if your variables are not initialized prior to starting   }
+  { the communications events                                               }
+  {--------------- ATTENTION ^ READ IT -------------------------------------}
+  responseReset;
+  fImageRedraw                    := True;
+  DXTimer1.Enabled                := True;
+end;
+
+procedure TMainForm.imgSimtekLogoClick(Sender: TObject);
+var url : string;
+begin
+  url := lblAddressWWW;
+  ShellExecute(self.WindowHandle,'open',PChar(url),nil,nil, SW_SHOWNORMAL);
+end;
+
+procedure TMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  Action := caFree;                                     //
+end;
+
+function TMainForm.buildMainCaption: string;
+var s  : string;
+begin
+  s := 'Test Software ' + lblTestSoftwareCap + '   IP = ' + edtIPAddress.Text + '   Device Port = ' + edtClientPort.Text;
+  Result := s;
+end;
+
+function TMainForm.encodeCommandData(CommandByte: byte): string;
+var
+   s       : string;
+   tmp     : integer;
+   cs      : byte;
+
+   DPtr    : pbyte;
+begin
+  s := '';
+  case CommandByte of
+//  C0Command          = 'Reset';      C0Request          = $90; // Reset Request
+//  C1Command          = 'Options';    C1Request          = $91; // Options Change Request
+//  C2Command          = 'Firmware';   C2Request          = $92; // Firmware information
+//  C3Command          = 'Displays';   C3Request          = $A0; // Display Request
+//  C4Command          = 'Indicator';  C4Request          = $A1; // Indicator/Annunciator Change Request
+//  C5Command          = 'Dimming';    C5Request          = $B0; // Dimming Change Request
+//  C6Command          = 'Status';     C6Request          = $D0; // Input Status Request
+    C0Request  : begin               // reset
+      C0RequestData[1] := CommandByte;
+      s        := chr(C0RequestData[1]);
+      inc(NumberOfRequests);
+      end;
+    C2Request  : begin               // firmware
+      C2RequestData[1] := CommandByte;
+      s        := chr(C2RequestData[1]);  // 01
+      inc(NumberOfRequests);
+    end;
+    C3Request : begin                 // Display
+//    C4RequestData[2] := iNDICATORS;
+      C3RequestData[1] := CommandByte;
+      s        := chr(C3RequestData[1]);       // 01
+      s        := s + chr(C3RequestData[2]);   // 02
+      s        := s + chr(C3RequestData[3]);   // 02
+      s        := s + chr(C3RequestData[4]);   // 02
+      s        := s + chr(C3RequestData[5]);   // 02
+//      s        := s + chr(C3RequestData[6]);   // 02
+//      s        := s + chr(C3RequestData[7]);   // 02
+//      s        := s + chr(C3RequestData[8]);   // 02
+//      s        := s + chr(C3RequestData[9]);   // 02
+      inc(NumberOfRequests);
+      end;
+
+    else begin
+      s   := chr(CommandByte);
+    end;
+  end;
+  TXCount := 30;
+  Result  := s;
+end;
+
+
+procedure TMainForm.wrMemoWindow(show,memo,lbl :TObject; limit,place : integer;head,cap,s : string);
+var lsLineNum : string;
+    i         : integer;
+    cnt       : byte;
+    SMsg      : string;
+begin
+  if TCheckBox(show).Checked then
+    begin
+    cnt := length(s);
+    SMsg  := '';
+    for i := 1 to cnt do {Loop through the buffer and}
+      SMsg  := SMsg + IntToHex(ord(s[i]),2)+' '; {Convert the bytes to a pascal string}
+
+    if TRichEdit(memo).Lines.Count >= limit then TRichEdit(memo).Clear;
+    lsLineNum := head + IntToStr(TRichEdit(memo).Lines.Count) + ' -> ';
+
+    While length(lsLineNum) < (place + 7) do
+      Insert('0',lsLineNum,4);
+
+    TRichEdit(memo).Lines.Add(lsLineNum + SMsg);          {then store them in the RX Window }
+    TLabel(lbl).Caption := cap + IntToStr(TRichEdit(memo).Lines.Count);
+    end;
+end;
+
+procedure TMainForm.memoRxChange(Sender: TObject);
+begin
+  lblReceived.Caption := 'Lines Received : ' + IntToStr(memoRx.lines.count);
+end;
+
+procedure TMainForm.memoRxKeyPress(Sender: TObject; var Key: char);
+var UserrecieveString,CharacterCreationString,StringToRecieve : string;
+    CharacterPointer,CharacterToRecieve,Stringlength,BadCharPos : byte;
+begin
+  case Key of
+    '0'..'9':;
+    'A'..'F':;
+    'a'..'f':;
+    #8 :;
+    #13:begin
+        UserrecieveString := memoRx.Lines.Strings[memoRx.Lines.Count-1];
+        memoRx.Lines.Delete(memoRx.Lines.Count-1);
+        BadCharPos := pos('>',UserrecieveString);
+        if BadCharPos <> 0 then
+          begin
+          memoRx.Lines.Add(UserrecieveString);
+          Delete(UserrecieveString,1,BadCharPos+1);
+          end;
+        While pos(' ',UserrecieveString) <> 0 do
+          begin
+          BadCharPos := pos(' ',UserrecieveString);
+          Delete(UserrecieveString,BadCharPos,1);
+          end;//while
+        Stringlength := length(UserrecieveString);
+        CharacterPointer := 1;
+        StringToRecieve := '';
+        While CharacterPointer <= Stringlength do
+          begin
+          CharacterCreationString := '$' + UserrecieveString[CharacterPointer] + UserrecieveString[CharacterPointer+1];
+          CharacterToRecieve := StrToInt(CharacterCreationString);
+          StringToRecieve := StringToRecieve + Chr(CharacterToRecieve);
+          CharacterPointer := CharacterPointer + 2;
+          end;
+        if StringToRecieve <> '' then decodeRecievedData(StringToRecieve);
+        Key := #00;
+        end;
+    else Key := #00;
+  end;//case
+end;
+
+procedure TMainForm.memoTxChange(Sender: TObject);
+begin
+  lblTransmitted.Caption := 'Lines Transmitted : ' + IntToStr(memoTx.lines.count);
+end;
+
+procedure TMainForm.memoTxKeyPress(Sender: TObject; var Key: char);
+var UserTransmitString,CharacterCreationString,StringToTransmit : string;
+    CharacterPointer,CharacterToTransmit,Stringlength,BadCharPos : byte;
+begin
+ case Key of
+  '0'..'9':;
+  'A'..'F':;
+  'a'..'f':;
+  #8:;
+  #13:begin
+      UserTransmitString := memoTx.Lines.Strings[memoTx.Lines.Count-1];
+      memoTx.Lines.Delete(memoTx.Lines.Count-1);
+      BadCharPos := pos('>',UserTransmitString);
+      if BadCharPos <> 0 then
+       begin
+       memoTx.Lines.Add(UserTransmitString);
+       Delete(UserTransmitString,1,BadCharPos+1);
+       end;
+      While pos(' ',UserTransmitString) <> 0 do
+       begin
+       BadCharPos := pos(' ',UserTransmitString);
+       Delete(UserTransmitString,BadCharPos,1);
+       end;//while
+      Stringlength := length(UserTransmitString);
+      CharacterPointer := 1;
+      StringToTransmit := '';
+      While CharacterPointer <= Stringlength do
+       begin
+       CharacterCreationString := '$' + UserTransmitString[CharacterPointer] + UserTransmitString[CharacterPointer+1];
+       CharacterToTransmit := StrToInt(CharacterCreationString);
+       StringToTransmit := StringToTransmit + Chr(CharacterToTransmit);
+       CharacterPointer := CharacterPointer + 2;
+       end;
+      if StringToTransmit <> '' then cpOutputData(StringToTransmit, False);
+      if cbxResponse.Checked then
+        begin
+        inc(NumberOfRequests);
+        end;
+      Key := #00;
+      end;
+  else Key := #00;
+  end;//case
+end;
+
+procedure TMainForm.cpOutputData(s: string; rc: boolean);
+var
+   i         : integer;
+   count     : byte;
+   SMsg      : string;
+   lsLineNum : string;
+begin
+  if s <> '' then
+    begin
+    IdUDPClient1.Host := edtIPAddress.Text;
+    IdUDPClient1.Send(s);
+//    TXCount := 30;
+
+    end;
+  wrMemoWindow(cbxTRXWindowEnable,memoTx,lblTransmitted,TxWinLimit,TxPlace,'TX ','Lines Transmitted : ',s);
+end;
+
+
+
+procedure TMainForm.tkbC2UpdateRateChange(Sender: TObject);
+begin
+  lblC2TransmitRate.Caption := IntToStr(tkbC2UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC3UpdateRateChange(Sender: TObject);
+begin
+  lblC3TransmitRate.Caption := IntToStr(tkbC3UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC4UpdateRateChange(Sender: TObject);
+begin
+  lblC4TransmitRate.Caption := IntToStr(tkbC4UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC5UpdateRateChange(Sender: TObject);
+begin
+  lblC5TransmitRate.Caption := IntToStr(tkbC5UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC6UpdateRateChange(Sender: TObject);
+begin
+  lblC6TransmitRate.Caption := IntToStr(tkbC6UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbRecieveTimeOutChange(Sender: TObject);
+begin
+  lblRecievedTimeout.Caption := 'Recieve Timeout = ' + IntToStr(tkbRecieveTimeOut.Position);
+end;
+
+procedure TMainForm.tkbScrollRateChange(Sender: TObject);
+begin
+ if tkbScrollRate.Position < tbUpdateRate.Position then
+   tbUpdateRate.Position := tkbScrollRate.Position;
+ lblScrollRate.caption   := 'Scroll Rate Value: ' + InttoStr(tkbScrollRate.Position);
+end;
+
+procedure TMainForm.tkb_CabinAltChange(Sender: TObject);
+var sin, cos : word;
+begin
+
+
+  if oldSlider <> tkb_CabinAlt.Position then
+  begin
+    if statusFlg = false then
+    begin
+      edt_Dial.Text := InttoStr(tkb_CabinAlt.Position);
+
+        sin := sine_value[TTrackBar(Sender).Position];
+        cos := cosine_value[TTrackBar(Sender).Position];
+        Sin_cabAlt.Caption := 'SIN = 0x' + IntToHEx(ord(sin),4);
+        Cos_cabAlt.Caption := 'COS = 0x' + IntToHEx(ord(cos),4);
+
+        C3Requestdata[2] := sin and $003F;
+        C3Requestdata[3] := sin and $0FC0 shr 6;
+        C3Requestdata[4] := cos and $003F;
+        C3Requestdata[5] := cos and $0FC0 shr 6;
+
+  if resetbit <> True then fC3Request := true;
+
+    end
+    else
+    begin
+      statusFlg := false;
+    end;
+    ScrollDial := tkb_CabinAlt.Position;
+    fC1Request := true;
+    oldSlider := tkb_CabinAlt.Position;
+    end;
+
+end;
+
+procedure TMainForm.tkb_DiffPressChange(Sender: TObject);
+var sin, cos : word;
+begin
+  sin := sine_value[TTrackBar(Sender).Position];
+  cos := cosine_value[TTrackBar(Sender).Position];
+  Sin_diffPres.Caption := 'SIN = 0x' + IntToHEx(ord(sin),4);
+  Cos_diffPres.Caption := 'COS = 0x' + IntToHEx(ord(cos),4);
+
+  C3Requestdata[6] := sin and $003F;
+  C3Requestdata[7] := sin and $0FC0 shr 6;
+  C3Requestdata[8] := cos and $003F;
+  C3Requestdata[9] := cos and $0FC0 shr 6;
+  if resetbit <> True then fC3Request := true;
+end;
+
+procedure TMainForm.Cut1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      CutToClipBoard;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Copy1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      CopyToClipboard;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Paste1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      PasteFromClipboard;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Delete1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      ClearSelection;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Selectall1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      SelectAll;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.pmClearAllClick(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      Clear;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Print1Click(Sender: TObject);
+var s : string;
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      s                           := Name;
+      Print(s + ' Contents');
+    Except
+      on EInOutError do
+        begin
+        MessageDlg('Error Printing Text',mtError,[mbOk],0);
+        Beep;
+        end;
+    End;
+   end;
+end;
+
+procedure TMainForm.cbxResponseClick(Sender: TObject);
+begin
+  lblResponseRequestsTitle1.Visible := cbxResponse.Checked;
+  lblRequestsSent.Visible           := cbxResponse.Checked;
+  lblResponseRequestsTitle2.Visible := cbxResponse.Checked;
+  lblResponseRecieved.Visible       := cbxResponse.Checked;
+  lblRecievedTimeout.Visible        := cbxResponse.Checked;
+  tkbRecieveTimeOut.Visible         := cbxResponse.Checked;
+  N1.Visible                        := cbxResponse.Checked;
+  mm02s03.Visible                   := cbxResponse.Checked;
+  NumberOfRequests                  :=   0;
+  NumberOfResponse                  :=   0;
+end;
+
+procedure TMainForm.ScrollBar2Change(Sender: TObject);
+//r ofset : integer;
+begin
+    lblTransmitRate.Top           :=  10 - ScrollBar2.Position;
+    tbUpdateRate.Top              :=  22 - ScrollBar2.Position;
+
+    lblC2TransmitRate.Top         :=  94 - ScrollBar2.Position;
+    tkbC2UpdateRate.Top           := 106 - ScrollBar2.Position;
+    lblC3TransmitRate.Top         := 136 - ScrollBar2.Position;
+    tkbC3UpdateRate.Top           := 148 - ScrollBar2.Position;
+    lblC4TransmitRate.Top         := 178 - ScrollBar2.Position;
+    tkbC4UpdateRate.Top           := 190 - ScrollBar2.Position;
+    lblC5TransmitRate.Top         := 220 - ScrollBar2.Position;
+    tkbC5UpdateRate.Top           := 232 - ScrollBar2.Position;
+    lblC6TransmitRate.Top         := 262 - ScrollBar2.Position;
+    tkbC6UpdateRate.Top           := 270 - ScrollBar2.Position;
+    cbxTRXWindowEnable.Top        := 310 - ScrollBar2.Position;
+    cbxRDXWindowEnable.Top        := 330 - ScrollBar2.Position;
+    cbxGraphicsEnable.Top         := 350 - ScrollBar2.Position;
+    cbxResponse.Top               := 370 - ScrollBar2.Position;
+    lblResponseRequestsTitle1.Top := 390 - ScrollBar2.Position;
+    lblRequestsSent.Top           := 390 - ScrollBar2.Position;
+    lblResponseRequestsTitle2.Top := 410 - ScrollBar2.Position;
+    lblResponseRecieved.Top       := 410 - ScrollBar2.Position;
+    lblRecievedTimeout.Top        := 430 - ScrollBar2.Position;
+    tkbRecieveTimeOut.Top         := 430 - ScrollBar2.Position;
+//  if cbxResponse.Checked then   ofset :=  60
+//  else                          ofset :=   0;
+//    lblPot2TrapZero.caption       := IntToStr(ScrollBar2.Position);
+end;
+
+procedure TMainForm.edtClientPortKeyPress(Sender: TObject; var Key: char);
+var port      : integer;
+    SimtekIni : TIniFile;
+begin
+ case Key of
+  '0'..'9':;
+  #8:;
+  #13:begin
+      port                        := StrToInt(edtClientPort.Text);
+      IdUDPClient1.Port           := port;
+      with TEdit(Sender) do
+        begin
+        SimtekIni                 := TIniFile.Create('C:\Simtek.Ini');
+        with SimtekIni do begin   WriteString(InstSec, InstSecK02, edtClientPort.Text); end; {Set the default flags for startup          }
+        SimtekIni.Free;
+        end;//with TEdit
+      MainForm.Caption            := buildMainCaption;       //
+      end//case #13
+  else Key := #00;
+  end;//case
+end;
+
+procedure TMainForm.edtIPAddressKeyPress(Sender: TObject; var Key: char);
+var SimtekIni : TIniFile;
+begin
+  case key of
+   '0'..'9':;
+   '.':;
+  #8:;
+  #13:begin
+      with TEdit(Sender) do
+        begin
+        SimtekIni                 := TIniFile.Create('C:\Simtek.Ini');
+        with SimtekIni do begin   WriteString(InstSec, InstSecK01, edtIPAddress.Text); end; {Set the default flags for startup          }
+        SimtekIni.Free;
+        end;// with
+      MainForm.Caption            := buildMainCaption;       //
+      end//case #13
+   else Key := #00;
+   end;
+end;
+
+procedure TMainForm.edt_DialClick(Sender: TObject);
+begin
+   TEdit(Sender).Selectall;
+
+end;
+
+procedure TMainForm.edt_DialKeyPress(Sender: TObject; var Key: Char);
+begin
+
+  case key of
+   '0'..'9':;
+   '.':;
+  #8:;
+  #13:begin
+        statusFlg := True;
+        tkb_CabinAlt.Position := StrtoInt(edt_Dial.Text);
+        ActiveControl := pnlDevice;
+      end//case #13
+   else Key := #00;
+   end;
+
+end;
+
+procedure TMainForm.mm01s01Click(Sender: TObject);
+begin
+  Close;
+end;
+
+procedure TMainForm.mm02s01Click(Sender: TObject);
+begin
+  MemoRx.Clear;                              // blank the window
+end;
+
+procedure TMainForm.mm02s02Click(Sender: TObject);
+begin
+  MemoTx.Clear;                              // blank the window
+end;
+
+procedure TMainForm.mm02s03Click(Sender: TObject);
+begin
+  NumberOfRequests                := 0;
+  NumberOfResponse                := 0;
+end;
+
+procedure TMainForm.mm03s01Click(Sender: TObject);
+var i : byte;
+begin
+  mm03s02.Checked           := mm03s01.Checked;
+  mm03s01.Checked           := not mm03s01.Checked;
+  gRate.ui                  := 0;
+  gRate.s                   := '';
+  gRate.ai                  := 0;
+  gRate.us                  := 0;
+  for i := 0 to 255 do
+    gRate.ar[i]             := 0;
+  gRate.ui                  := 0;
+  gRate.uc                  := 0;
+  gRateC1                   := gRate;
+  gRateC2                   := gRate;
+  gRateC3                   := gRate;
+  gRateC4                   := gRate;
+end;
+
+procedure TMainForm.mm03s03Click(Sender: TObject);
+begin
+  mm03s03.Checked                 := mm03s04.Checked;
+  mm03s04.Checked                 := not mm03s04.Checked;
+end;
+
+procedure TMainForm.mm03s05s00Click(Sender: TObject);
+begin
+  TMenuItem(Sender).Checked       := not TMenuItem(Sender).Checked;
+end;
+
+procedure TMainForm.mm05Click(Sender: TObject);
+begin
+  mm05.Checked        := not mm05.Checked;
+  fScrollReq          := mm05.Checked;
+  dScrollValue        := 0;
+  ScrollCount         := ScrollCount;
+  fImageRedraw        := True;
+end;
+
+procedure TMainForm.mm06Click(Sender: TObject);
+begin
+  responsereset;
+  fC0Request                      := True;
+  resetbit := True;
+end;
+
+
+procedure TMainForm.mm08Click(Sender: TObject);
+begin
+  fC2Request                      := True;
+end;
+
+procedure TMainForm.mm09Click(Sender: TObject);
+begin
+  fC3Request                      := True;
+end;
+
+
+
+
+procedure TMainForm.responseReset;
+begin
+    resetbit := True;
+    memoTx.Clear;                              // Blank the dataout and datain
+    memoRx.Clear;                              // Blank the dataout and datain
+
+    mm06.Caption                     := '&'+C0Command;
+
+    mm08.Caption                     := C2Command;
+    mm09.Caption                     := C3Command;
+    mm03s05s02.Caption               := '&'+C2Command;
+    mm03s05s03.Caption               := '&'+C3Command;
+
+
+    lblFirmwareValue1.Caption        := C2DeviceValDefault;
+    lblFirmwareValue2.Caption        := C2DeviceValDefault;
+
+    MainForm.Caption                 := buildMainCaption;       //
+    lblTransmitRate.Caption          := TSCapHeader + '0.00Hz';
+    lblC2TransmitRate.Caption        := C2CapHeader + '0.00Hz';
+    lblC3TransmitRate.Caption        := C3CapHeader + '0.00Hz';
+
+
+
+    lblTestSoftwarePNValue.Caption   := lblTestSoftwareCap;
+    lblTestSoftwareRevValue.Caption  := lblTestSoftwareRev;
+    lblWARNING.Caption               := lblWARNINGCaption;
+
+    tkb_DiffPress.Position := 0;
+    tkb_CabinAlt.Position  := 0;
+
+    ScrollDial := 0;
+    ScrollDir := True;
+    lblScrollRate.caption   := 'Scroll Rate Value: ' + InttoStr(tkbScrollRate.Position);
+
+    fImageRedraw:= True;
+//    ActiveControl                    := UserImage;
+    resetbit := False;
+end;
+
+
+procedure TMainForm.responseFirmware(s : string);
+var
+  si    : string;
+  b1,b2 : byte;
+begin
+    inc(NumberOfResponse);
+    b2 := Ord(s[2]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := ': ' + chr(b1) + chr(b2) + '-';
+    b2 := Ord(s[3]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2);
+    b2 := Ord(s[4]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2) + ' rev ';
+    si := si + s[5];
+    lblFirmwareValue1.Caption := si;
+    b2 := Ord(s[6]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := ': ' + chr(b1) + chr(b2) + '-';
+    b2 := Ord(s[7]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2);
+    b2 := Ord(s[8]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2) + ' rev ';
+    si := si + s[9];
+    lblFirmwareValue2.Caption := si;
+end;
+
+procedure TMainForm.memoRevisionEnter(Sender: TObject);
+begin
+  memoRevision.Height            := 290;
+end;
+
+
+procedure TMainForm.memoRevisionExit(Sender: TObject);
+begin
+  memoRevision.Height     := 38;
+  ActiveControl           := nil;
+end;
+
+procedure TMainForm.memoRevisionMouseLeave(Sender: TObject);
+begin
+  memoRevision.Height     := 38;
+  ActiveControl           := nil;
+end;
+
+procedure TMainForm.PopupMenu1Popup(Sender: TObject);
+var   ln,ch : integer;
+const copy   = 0;
+      cut    = 1;
+      paste  = 2;
+      delete = 3;
+      select = 5;
+      clear  = 7;
+      print  = 9;
+begin
+  ln        := 0;
+  ch        := 0;
+  if PopupMenu1.PopupComponent = memoTx then
+   begin
+   ln       := memoTx.Sellength;
+   ch       := length(memoTx.Text);
+   end
+  else if PopupMenu1.PopupComponent = memoRx then
+   begin
+   ln       := memoRx.Sellength;
+   ch       := length(memoRx.Text);
+   end
+  else
+   Beep;
+  if ln > 0 then
+   begin
+   PopUpMenu1.Items[copy].Enabled   := True;
+   PopUpMenu1.Items[cut].Enabled    := True;
+   PopUpMenu1.Items[delete].Enabled := True;
+   end
+  else
+   begin
+   PopUpMenu1.Items[copy].Enabled   := False;
+   PopUpMenu1.Items[cut].Enabled    := False;
+   PopUpMenu1.Items[delete].Enabled := False;
+   end;
+  if ch <> 0 then
+   begin
+   PopUpMenu1.Items[select].Enabled := True;
+   PopUpMenu1.Items[clear].Enabled  := True;
+   PopUpMenu1.Items[print].Enabled  := True;
+   end
+  else
+   begin
+   PopUpMenu1.Items[select].Enabled := False;
+   PopUpMenu1.Items[clear].Enabled  := False;
+   PopUpMenu1.Items[print].Enabled  := False;
+   end;
+end;
+
+procedure TMainForm.tbUpdateRateChange(Sender: TObject);
+begin
+ if tbUpdateRate.Position = 0 then DXTimer1.Interval := 0 else DXTimer1.Interval := 1;
+ if tkbScrollRate.Position < tbUpdateRate.Position then
+   tkbScrollRate.Position := tbUpdateRate.Position;
+end;
+
+
+function TMainForm.calculateRate(ct : double;g : Tx;rc : boolean;l : TObject;t : TObject; s : string):Tx;
+var
+   i   : integer;
+   cus : double; // current update speed
+   cuh : double; // current update Hz
+   cua : double; // current update average
+begin
+  if (g.us <> 0) and rc then
+    begin
+    cus := (ct - g.us) * 86400;
+    if cus <> 0 then
+      begin
+      g.ar[g.ai] := cus;
+      inc(g.ai);
+      if g.ui < 255 then Inc(g.ui);
+      cua := 0;
+      for i := 0 to (g.ui - 1) do
+        begin  cua := cua + g.ar[i];    end;
+      cus := cua / g.ui;
+      cuh := RoundTo((1 / cus),-2);
+      g.s := FloatToStr(cuh) +'Hz';
+      g.us := ct;
+      end;//if cus <> 0 then
+    end// if g.us <> 0 then
+  else if rc then
+    begin
+    g.us := ct;
+    g.ai := 0;
+    end;//else if g.us <> 0 then
+  TLabel(l).Caption := s + g.s + ' ' +  IntToStr(TTrackBar(t).Position);
+  Result := g;
+end;
+
+procedure TMainForm.DXTimer1Timer(Sender: TObject; LagCount: Integer);
+var  rxtimeout : integer;                 // timeout time for attempt to read receive buffer
+     wdlist    : array[0..10] of string;  //
+     wrstr     : string;                  // string to write to transmit buffer
+     li        : integer;                 // line index
+     counter   : integer;                 //
+     ratecalc  : boolean;                 //
+     ctime     : double;                  //
+begin
+  rxtimeout                   := tkbRecieveTimeOut.Position;
+  wrstr                       := '';
+  lblRequestsSent.Caption     := ': ' + IntToStr(NumberOfRequests);
+  lblResponseRecieved.Caption := ': ' + IntToStr(NumberOfResponse);
+
+  if NumberOfRequests > NumberOfResponse then
+    begin
+    wrstr     := IdUDPClient1.ReceiveString(rxtimeout);
+    if wrstr <> '' then decodeRecievedData(wrstr);
+    RXCount    := 30;
+    end;// if NumberOfRequests > NumberOfResponse then
+  if fScrollReq then
+    begin
+    if ScrollCount > tkbScrollRate.Position then
+      begin
+         scrollEverything();
+      if dScrollValue > 57 then dScrollValue := 1;
+      fImageRedraw    := True;
+      ScrollCount     := 255;
+      inc(dScrollValue);
+      end;
+      inc(ScrollCount);
+    end;
+  wrstr           := '';
+  mm03s05.Checked := mm03s05s01.Checked
+                  or mm03s05s02.Checked
+                  or mm03s05s03.Checked
+                  or mm03s05s04.Checked
+                  or mm03s05s05.Checked
+                  or mm03s05s06.Checked;
+  inc(gRate.uc);
+
+  if gRateC2.uc >= (tkbC2UpdateRate.Position) then
+    begin
+    if mm03s05.Checked and mm03s02.Checked then
+      begin      if mm03s05s02.Checked then fC2Request := True;   end;
+    gRateC2.uc := 0;
+    end; //if gRateC2.uc >= (tkbC2UpdateRate.Position)then
+
+  if gRateC3.uc >= (tkbC3UpdateRate.Position) then
+    begin
+    if mm03s05.Checked and mm03s02.Checked then
+      begin      if mm03s05s03.Checked then fC3Request := True;   end;
+    gRateC3.uc := 0;
+    end; //if gRateC3.uc >= (tkbC3UpdateRate.Position)then
+
+  ctime           := Now;
+  li              := 0;
+
+  if fC0Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C0Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    fC0Request    := False;
+    end;// if fC0Request
+
+
+
+  if fC2Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C2Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    gRateC2 := calculateRate(ctime, gRateC2, True, lblC2TransmitRate, tkbC2UpdateRate, C2CapHeader);
+    fC2Request    := False;
+    end;// if fC2Request
+
+  if fC3Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C3Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    gRateC3 := calculateRate(ctime, gRateC3, True, lblC3TransmitRate, tkbC3UpdateRate, C3CapHeader);
+    fC3Request    := False;
+    end;// if fC3Request
+
+
+  if mm03s03.Checked and (wrstr <> '') then
+    begin
+    inc(li);
+    wdlist[li]    := wrstr;
+    wrstr         := '';
+    end;//if mm03s01.Checked
+
+  if gRate.uc >= (tbUpdateRate.Position) then
+    begin
+    if mm03s02.Checked then gRate := calculateRate(ctime,    gRate, True, lblTransmitRate, tbUpdateRate, TSCapHeader)
+    else                    gRate := calculateRate(gRate.uc, gRate, True, lblTransmitRate, tbUpdateRate, TSCapHeader);
+
+    if li <> 0 then
+      begin
+      for counter  := 1 to li do
+        begin
+        wrstr           := wdlist[counter];
+        wdlist[counter] := '';
+        if counter       = li then ratecalc := True else  ratecalc := False;
+        cpOutputData(wrstr, ratecalc);
+        end;//for counter := 1 to li do
+      end;//if li <> 0 then
+    gRate.uc := 0;
+    inc(gRateC1.uc);
+    inc(gRateC2.uc);
+    inc(gRateC3.uc);
+    inc(gRateC4.uc);
+    inc(gRateC5.uc);
+    inc(gRateC6.uc);
+    end;//if gRate.uc >= (tbUpdateRate.Position) then
+
+  if (fImageRedraw and cbxGraphicsEnable.Checked) then
+    begin
+    paintGUI;
+    end;
+
+  if TXCount > 1 then
+  Dec(TXCount);
+  if TXCount = 1 then
+    begin
+    TXCount := 0;
+    end;
+
+  if RXCount > 1 then Dec(RXCount);
+  if RXCount = 1 then
+    begin
+    RXCount := 0;
+    end;
+end;
+
+procedure TMainForm.decodeRecievedData(s: string);
+var
+  SMsg      : string;
+  lsLineNum : string;
+  i         : integer;
+  count     : byte;
+  cal,giv   : byte;
+  DPtr      : pbyte;
+  SPtr      : pbyte;
+begin
+  if length(s) <> 0 then
+    begin
+    i := 1;
+    while i <= length(s) do
+      begin
+      case Ord(s[i]) of
+//  C2Response  = C2Request;   C2Responselength  = 9;  // program response
+        C2Response : begin  // program revision
+          SPtr     := Addr(s[i]);
+          DPtr     := Addr(C2ResponseData[1]);
+          CopyMemory(DPtr, SPtr, C2Responselength);
+          inc(NumberOfResponse);
+          responseFirmware(s);
+          i        := i + C2Responselength;
+          fImageRedraw := True;
+          end;//case = C2Response
+        else
+          begin
+          i          := i + 1;
+          end;
+        end;// case Ord(s[i]) of
+      end;// while i <= length(s) do
+    end;// if length(s) <> 0 then
+  wrMemoWindow(cbxRDXWindowEnable,memoRx,lblReceived,RxWinLimit,RxPlace,'RX ','Lines Received : ',s);
+end;
+
+procedure TMainForm.paintGUI;
+begin
+  fImageRedraw := False;
+  lblC3TransmitRate.top := 55;
+  tkbC3UpdateRate.top   := 67;
+
+
+end;
+
+
+procedure TMainForm.lblFirmwareTitle1Click(Sender: TObject);
+begin
+  lblFirmwareValue1.Caption := C2DeviceValDefault;
+  lblFirmwareValue2.Caption := C2DeviceValDefault;
+end;
+
+
+procedure TMainForm.scrollEverything();
+begin
+
+  tkb_DiffPress.Position := scrollDial;
+  tkb_CabinAlt.Position  := scrollDial;
+
+  if ScrollDir then ScrollDial  := ScrollDial + 5
+  else ScrollDial := ScrollDial - 5;
+
+  if ScrollDial >= 4095 then ScrollDir := False
+  else if ScrollDial <= 0 then ScrollDir := True;
+
+
+end;
+
+end.

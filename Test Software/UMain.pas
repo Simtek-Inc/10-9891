@@ -1,0 +1,1653 @@
+// Created by Matthew Fischer for Simtek Inc.
+unit UMain;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls, ExtCtrls, ComCtrls, Menus, IniFiles, Math,
+  DXClass, DIB, ExtDlgs, IdBaseComponent, IdComponent, IdUDPBase,
+  IdUDPClient, ShellAPI, jpeg;
+
+const
+  InstNum            = '9891';
+  InstRevLevel       = '-';
+  lblAddressWWW      = 'www.simtekinc.com';
+  lblTestSoftwareCap = ': 10-' + InstNum;
+  lblTestSoftwareRev = ':   ' + InstRevLevel;
+  lblWARNINGCaption  = 'CAUTION FOR USE IN' +#$0D#$0A+ 'FLIGHT SIMULATOR ONLY';
+  InstSec            = '10' + InstNum;
+  icTXQue            = 512;
+  icRXQue            = 1024;
+  GENSec             = 'general';
+  InstSecK01         = 'edtIPAddress';
+  InstSecK02         = 'edtClientPort';
+  InstSecK03         = 'cpdCOMBAUDRATE';
+  GenSecK01          = 'TxWinLimit';
+  GenSecK02          = 'RxWinLimit';
+  GenSecK03          = 'cpdDATABITS';
+  GenSecK04          = 'cpdPARITY';
+  GenSecK05          = 'cpdSTOPBITS';
+// Host Command Setn to the Instrument
+  TSCapHeader        = ' Transmit speed = ';
+
+  C0Command          = 'Reset';
+  C0Request          = $F0; // Reset Request
+  C0Requestlength    = 1;
+  C0CapHeader        = C0Command + ' Transmit speed = ';
+  C0Response         = C0Request;
+  C0Responselength   = 0;
+
+//  C1Command          = 'Options';
+//  C1Request          = $91; // Options Change Request
+//  C1Requestlength    = 3;
+//  C1CapHeader        = C1Command + ' Transmit speed = ';
+//  C1Response         = C1Request;
+//  C1Responselength   = 0;
+
+  C2Command          = 'Firmware';
+  C2Request          = $FE; // Firmware information
+  C2Requestlength    = 1;
+  C2CapHeader        = C2Command + ' Transmit speed = ';
+  C2DeviceValDefault = ': 76-5064 Rev ?';
+  C2Response         = C2Request;
+  C2Responselength   = 9;
+
+  C3Command          = 'Control';
+  C3Request          = $F5; // Display Request
+  C3Requestlength    = 9;
+  C3CapHeader        = C3Command + ' Transmit speed = ';
+  C3Response         = C3Request;
+  C3Responselength   = 0;
+
+  C4Command          = 'Indicator';
+  C4Request          = $F3; // Indicator/Annunciator Change Request
+  C4Requestlength    = 2;
+  C4CapHeader        = C4Command + ' Transmit speed = ';
+  C4Response         = C4Request;
+  C4Responselength   = 0;
+
+  C5Command          = 'Dimming';
+  C5Request          = $F4; // Dimming Change Request
+  C5Requestlength    = 2;
+  C5CapHeader        = C5Command + ' Transmit speed = ';
+  C5Response         = C5Request;
+  C5Responselength   = 0;
+
+//  C6Command          = 'Status';
+//  C6Request          = $F1; // Input Status Request
+//  C6Requestlength    = 1;
+//  C6CapHeader        = C6Command + ' Transmit speed = ';
+//  C6Response         = C6Request;
+//  C6Responselength   = 5;
+
+
+  // Descriptive labels to use with routines
+  lblDimming1Cap     = 'Panel Dimming Level = ';
+  lblDimming1Hint    = 'Shows Display Brightness Value';
+  lblDimming2Cap     = 'Indicator Dimming Level = ';
+  lblDimming2Hint    = 'Shows Indicator Brightness Value';
+
+  clActive           = clLime;
+  clInactive         = clWhite;
+  lblBxbxValDefault  = ': unknown';
+
+  masterTop  : integer = 133;
+  masterBot  : integer = 167;
+  ecmTop     : integer = 257;
+  ecmBot     : integer = 295;
+  ircmTop    : integer = 257;
+  ircmBot    : integer = 295;
+  jetTop     : integer = 128;
+  jetbot     : integer = 208;
+
+  mpTop      : integer = 257;
+  mpMid      : integer = 279;
+  mpBot      : integer = 296;
+
+type
+ Tx = record
+   s    : string;                               //
+   ai   : byte;                                 // average update rate index
+   ar   : array[0..255] of double;              // average update rate
+   us   : double;                               // update speed
+   ui   : byte;                                 // update index
+   uc   : integer;                              // update rate count
+end;
+
+type
+  pbyte = ^byte;
+
+
+type
+  TMainForm = class(TDXForm)
+    DXTimer1: TDXTimer;
+    MainMenu1: TMainMenu;
+    StatusBar: TStatusBar;
+    PopupMenu1: TPopupMenu;
+    Cut1: TMenuItem;
+    Copy1: TMenuItem;
+    Paste1: TMenuItem;
+    Delete1: TMenuItem;
+    Selectall1: TMenuItem;
+    pmClearAll: TMenuItem;
+    Print1: TMenuItem;
+    IdUDPClient1: TIdUDPClient;
+    memoTx: TRichEdit;
+    lblTransmitted: TLabel;
+    memoRx: TRichEdit;
+    lblReceived: TLabel;
+    mm01: TMenuItem;
+    mm01s01: TMenuItem;
+    mm02: TMenuItem;
+    mm02s01: TMenuItem;
+    mm02s02: TMenuItem;
+    mm02s03: TMenuItem;
+    mm03: TMenuItem;
+    mm03s01: TMenuItem;
+    mm03s02: TMenuItem;
+    mm03s03: TMenuItem;
+    mm03s04: TMenuItem;
+    mm03s05: TMenuItem;
+    mm03s05s02: TMenuItem;
+    mm03s05s01: TMenuItem;
+    mm03s05s03: TMenuItem;
+    mm03s05s04: TMenuItem;
+    mm03s05s05: TMenuItem;
+    mm03s05s06: TMenuItem;
+    mm05: TMenuItem;
+    mm06: TMenuItem;
+    mm08: TMenuItem;
+    N1: TMenuItem;
+    N2: TMenuItem;
+    N3: TMenuItem;
+    N4: TMenuItem;
+    N5: TMenuItem;
+    N6: TMenuItem;
+
+    mm09: TMenuItem;
+    mm13: TMenuItem;
+    mm14: TMenuItem;
+
+    pnlDevice: TPanel;
+    tkb_CabinAlt: TTrackBar;
+    tkb_RudPos: TTrackBar;
+    lbl_Rudder: TLabel;
+    lbl_Aileron: TLabel;
+    COS_cabAlt: TLabel;
+    PageControl1: TPageControl;
+    TabSheet1: TTabSheet;
+    lblScrollRate: TLabel;
+    lblTestSoftwarePNValue: TLabel;
+    lblIPAddress: TLabel;
+    lblReceivePort: TLabel;
+    lblFirmwareTitle1: TLabel;
+    lblFirmwareTitle2: TLabel;
+    lblFirmwareValue1: TLabel;
+    lblWARNING: TLabel;
+    lblTestSoftwarePNTile: TLabel;
+    lblTestSoftwareRevValue: TLabel;
+    lblTestSoftwareRevTile: TLabel;
+    imgSimtekLogo: TImage;
+    lblFirmwareValue2: TLabel;
+    edtIPAddress: TEdit;
+    edtClientPort: TEdit;
+    pnlDividerBar05: TPanel;
+    pnlDividerBar03: TPanel;
+    pnlDividerBar01: TPanel;
+    pnlDividerBar02: TPanel;
+    pnlDividerBar04: TPanel;
+    tkbScrollRate: TTrackBar;
+    memoRevision: TMemo;
+    TabSheet4: TTabSheet;
+    lblResponseRequestsTitle1: TLabel;
+    lblResponseRequestsTitle2: TLabel;
+    lblRecievedTimeout: TLabel;
+    lblC2TransmitRate: TLabel;
+    lblC3TransmitRate: TLabel;
+    lblC4TransmitRate: TLabel;
+    lblTransmitRate: TLabel;
+    lblRequestsSent: TLabel;
+    lblResponseRecieved: TLabel;
+    lblC5TransmitRate: TLabel;
+    lblC6TransmitRate: TLabel;
+    cbxResponse: TCheckBox;
+    tkbRecieveTimeOut: TTrackBar;
+    tkbC2UpdateRate: TTrackBar;
+    tkbC3UpdateRate: TTrackBar;
+    tkbC4UpdateRate: TTrackBar;
+    tbUpdateRate: TTrackBar;
+    cbxGraphicsEnable: TCheckBox;
+    cbxTRXWindowEnable: TCheckBox;
+    cbxRDXWindowEnable: TCheckBox;
+    ScrollBar2: TScrollBar;
+    tkbC5UpdateRate: TTrackBar;
+    tkbC6UpdateRate: TTrackBar;
+    Label1: TLabel;
+    Label4: TLabel;
+    Label5: TLabel;
+    edt_Dial: TEdit;
+    lbl_Elevator: TLabel;
+    tkb_ElevPos: TTrackBar;
+    lbl_Flaps: TLabel;
+    tkb_FlapPos: TTrackBar;
+    edt_Rud: TEdit;
+    edt_Elev: TEdit;
+    edt_Flap: TEdit;
+    Label2: TLabel;
+    Label3: TLabel;
+    Label6: TLabel;
+    Label7: TLabel;
+    Label8: TLabel;
+    Label9: TLabel;
+    Label10: TLabel;
+    Label11: TLabel;
+    Label12: TLabel;
+    Label13: TLabel;
+    Label14: TLabel;
+    Label15: TLabel;
+    Label16: TLabel;
+    Label17: TLabel;
+    Label18: TLabel;
+
+    procedure FormCreate(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+
+    procedure PopupMenu1Popup(Sender: TObject);
+    procedure Copy1Click(Sender: TObject);
+    procedure Cut1Click(Sender: TObject);
+    procedure Delete1Click(Sender: TObject);
+    procedure Paste1Click(Sender: TObject);
+    procedure Selectall1Click(Sender: TObject);
+    procedure pmClearAllClick(Sender: TObject);
+    procedure Print1Click(Sender: TObject);
+
+    procedure DXTimer1Timer(Sender: TObject; LagCount: Integer);
+
+
+    procedure memoTxChange(Sender: TObject);
+    procedure memoRxChange(Sender: TObject);
+    procedure memoTxKeyPress(Sender: TObject; var Key: char);
+    procedure memoRxKeyPress(Sender: TObject; var Key: char);
+
+    procedure tbUpdateRateChange(Sender: TObject);
+    procedure lblFirmwareTitle1Click(Sender: TObject);
+    procedure edtClientPortKeyPress(Sender: TObject; var Key: char);
+    procedure edtIPAddressKeyPress(Sender: TObject; var Key: char);
+    procedure tkbScrollRateChange(Sender: TObject);
+    procedure cbxResponseClick(Sender: TObject);
+
+
+    procedure tkbRecieveTimeOutChange(Sender: TObject);
+
+    procedure mm01s01Click(Sender: TObject);
+    procedure mm02s01Click(Sender: TObject);
+    procedure mm03s01Click(Sender: TObject);
+    procedure mm02s03Click(Sender: TObject);
+    procedure mm03s03Click(Sender: TObject);
+    procedure mm03s05s00Click(Sender: TObject);
+    //procedure mm04Click(Sender: TObject);
+    procedure mm05Click(Sender: TObject);
+    procedure mm06Click(Sender: TObject);
+    procedure mm08Click(Sender: TObject);
+    procedure memoRevisionEnter(Sender: TObject);
+    procedure memoRevisionMouseLeave(Sender: TObject);
+    procedure ScrollBar2Change(Sender: TObject);
+    procedure imgSimtekLogoClick(Sender: TObject);
+    procedure memoRevisionExit(Sender: TObject);
+    procedure mm09Click(Sender: TObject);
+
+    procedure tkbC2UpdateRateChange(Sender: TObject);
+    procedure mm02s02Click(Sender: TObject);
+    procedure tkbC3UpdateRateChange(Sender: TObject);
+    procedure tkbC4UpdateRateChange(Sender: TObject);
+    procedure tkbC5UpdateRateChange(Sender: TObject);
+    procedure tkbC6UpdateRateChange(Sender: TObject);
+    procedure tkb_CabinAltChange(Sender: TObject);
+    procedure tkb_RudPosChange(Sender: TObject);
+    procedure tkb_ElevPosChange(Sender: TObject);
+    procedure tkb_FlapPosChange(Sender: TObject);
+    procedure edt_DialClick(Sender: TObject);
+    procedure edt_DialKeyPress(Sender: TObject; var Key: Char);
+  private
+    procedure paintGUI;
+    procedure decodeRecievedData(s : string);
+    function  encodeCommandData(CommandByte : byte) : string;
+    function  buildMainCaption : string;
+    function  calculateRate(ct : double;g : Tx;rc : boolean;l : TObject;t : TObject;s : string):Tx;
+    procedure cpOutputData(s : string; rc : boolean);
+    procedure scrollEverything();
+    procedure wrMemoWindow(show,memo,lbl :TObject; Limit,Place : integer;head,cap,s : string);
+
+    procedure responseReset;
+    procedure responseFirmware(s : string);
+    procedure updateIndicator;
+    procedure applyIndicatorDimming(Level : byte);
+    procedure updateAxisControl(TrackBar: TTrackBar; ValueEdit: TEdit; OffsetLabel: TLabel;
+                  BasePosition: Integer; DataLowIndex: Integer);
+
+  public
+  end;
+
+var
+  MainForm                 : TMainForm;
+  hWind                    : THandle;
+// Variables to control Software functions
+  dScrollValue             : byte    = 0;
+  ScrollCount              : integer = 0;
+  TXCount                  : byte    = 1; {define and initilize Counter}
+  RXCount                  : byte    = 1; {define and initilize Counter}
+  sWidth                   : integer = 1024;
+// Software control variables
+  RxWinLimit               : integer = 0;
+  RxPlace                  : integer = 0;
+  TxWinLimit               : integer = 0;
+  TxPlace                  : integer = 0;
+// Device Output control variables
+  fImageRedraw             : boolean;
+
+  ActiveDigit              : cardinal = 0;
+  C0RequestData            : array[0..C0Requestlength] of byte; // reset
+  //C1RequestData            : array[0..C1Requestlength] of byte; // options
+  C2RequestData            : array[0..C2Requestlength] of byte; // program revision
+  C3RequestData            : array[0..C3Requestlength] of byte; // Control
+  C4RequestData            : array[0..C4Requestlength] of byte; // indicator
+  C5RequestData            : array[0..C5Requestlength] of byte; // dimming
+  //C6RequestData            : array[0..C6Requestlength] of byte; // status
+
+  C2ResponseData           : array[0..C2Responselength] of byte; // program revision
+  C4ResponseData           : array[0..C4Requestlength] of byte; // indicator
+  C5ResponseData           : array[0..C5Requestlength] of byte; // dimming
+
+// Host to Instrument request Action Flags
+  fC0Request               : boolean  = False; // reset
+  fC1Request               : boolean  = False; // options
+  fC2Request               : boolean  = False; // program revision
+  fC3Request               : boolean  = False; // Control
+  fC4Request               : boolean  = False; // indicator
+  fC5Request               : boolean  = False; // dimming
+
+  fScrollReq               : boolean  = False; // scroll change flag
+  fgeneric                 : boolean  = False;
+
+// Device Input control variables
+  swMode                   : byte     = 1;
+  swPreset                 : byte     = 1;
+
+// Device BIT control variables
+  fPTInputStatus           : boolean  = False;
+  fCTInputStatus           : boolean  = False;
+  fRKInputStatus           : boolean  = False;
+  fOFLInputStatus          : boolean  = False;
+  fEBInputStaus            : boolean  = False;
+  fZALLInputStatus         : boolean  = False;
+  fPresetPWROFFInputStatus : boolean  = False;
+  fPresetMANInputStatus    : boolean  = False;
+  fPreset1InputStatus      : boolean  = False;
+  fPreset2InputStatus      : boolean  = False;
+  fPreset3InputStatus      : boolean  = False;
+  fPreset4InputStatus      : boolean  = False;
+  fPreset5InputStatus      : boolean  = False;
+  fPreset6InputStatus      : boolean  = False;
+  fPresetREMInputStatus    : boolean  = False;
+  fINITInputStatus         : boolean  = False;
+  fRightArrowInputStatus   : boolean  = False;
+  fUpArrowInputStatus      : boolean  = False;
+  fBRTDSPLA2DInputStatus   : boolean  = False;
+  fBRTPNLA2DInputStatus    : boolean  = False;
+  fMemoryStatus            : boolean  = False;
+// Display Dimming Variables
+  CurrentIndicatorBrightness : byte    = 0;
+  tkbDimming2Old           : integer;
+  tkbDimming1Old           : integer;
+//tkbDimming3Old           : integer;
+//flgDimming3Old           : boolean  = False;
+// Debug Variables
+  NumberOfRequests         : cardinal = 0;
+  UserImageSelected        : boolean  = True;
+  NumberOfResponse         : cardinal = 0;
+  gRate                    : Tx;
+  gRateC1                  : Tx; // StatusRequest      = $F1;
+  gRateC2                  : Tx; // DisplayRequest     = $F2;
+  gRateC3                  : Tx; // DimmingRequest     = $F3;
+  gRateC4                  : Tx; // FirmwareRequest    = $F4;
+  gRateC5                  : Tx; // FirmwareRequest    = $F4;
+  gRateC6                  : Tx; // FirmwareRequest    = $F4;
+  BurstFileName            : string = 'BurstFile.txt';
+  BurstFileContents        : TStringlist = nil;
+  //bit to reset procedures
+  resetbit                  : boolean;               //
+
+  oldSlider  : integer;
+  statusFlg  : boolean;
+  ScrollDial : integer;
+  ScrollDir  : boolean;
+
+// Axis values are raw 12-bit values packed into 2 bytes (bits 0-5 of each byte)
+// CabinAlt uses bytes 2-3, Rudder uses 4-5, Elevator uses 6-7, Flaps uses 8-9
+
+implementation
+
+{$R *.DFM}
+
+
+procedure TMainForm.FormCreate(Sender: TObject);
+var SimtekIni : TIniFile;
+    tmp : integer;
+begin
+  SimtekIni := TIniFile.Create('C:\Simtek.Ini');
+  With SimtekIni do
+    begin
+      // load the limit for the transmit and recieve windows
+    TxWinLimit         := ReadInteger(GENSec,  GenSecK01,  250);      //
+    RxWinLimit         := ReadInteger(GENSec,  GenSecK02,  250);      //
+    edtIPAddress.Text  := ReadString(InstSec,  InstSecK01, '192.168.136.90'); // {Set the default flags for startup          }
+    edtClientPort.Text := ReadString(InstSec,  InstSecK02, '51020');          //{Set the default flags for startup          }
+    IdUDPClient1.Port  := StrToInt(edtClientPort.Text);
+    end;
+  SimtekIni.Free;
+  TxPlace   := 1;
+  tmp       := TxWinLimit;
+  while tmp > 10 do
+    begin
+    tmp     := tmp div 10;
+    TxPlace := TxPlace + 1;
+    end;
+  tmp       := RxWinLimit;
+  while tmp > 10 do
+    begin
+    tmp     := tmp div 10;
+    RxPlace := RxPlace + 1;
+    end;
+  {---------------- ATTENTION ----------------------------------------------}
+  { initialize your variables here. DO NOT place them after the Port1click  }
+  { Routine as the communications events will be active and you may get an  }
+  { invalid value if your variables are not initialized prior to starting   }
+  { the communications events                                               }
+  {--------------- ATTENTION ^ READ IT -------------------------------------}
+  tkbC5UpdateRate.Min := 0;
+  tkbC5UpdateRate.Max := 255;
+  tkbC5UpdateRate.Frequency := 1;
+  tkbC5UpdateRate.LineSize := 1;
+  tkbC5UpdateRate.Visible := True;   // Show brightness trackbar for manual control
+  // Ensure all axis sliders invoke code handlers even if DFM wiring is missing.
+  tkb_RudPos.OnChange := tkb_RudPosChange;
+  tkb_ElevPos.OnChange := tkb_ElevPosChange;
+  tkb_FlapPos.OnChange := tkb_FlapPosChange;
+  // Make Rudder/Elevator/Flaps edit boxes behave like the aileron edit box.
+  edt_Rud.OnClick := edt_DialClick;
+  edt_Elev.OnClick := edt_DialClick;
+  edt_Flap.OnClick := edt_DialClick;
+  edt_Rud.OnKeyPress := edt_DialKeyPress;
+  edt_Elev.OnKeyPress := edt_DialKeyPress;
+  edt_Flap.OnKeyPress := edt_DialKeyPress;
+  responseReset;
+  fImageRedraw                    := True;
+  DXTimer1.Enabled                := True;
+end;
+
+procedure TMainForm.imgSimtekLogoClick(Sender: TObject);
+var url : string;
+begin
+  url := lblAddressWWW;
+  ShellExecute(self.WindowHandle,'open',PChar(url),nil,nil, SW_SHOWNORMAL);
+end;
+
+procedure TMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  Action := caFree;                                     //
+end;
+
+function TMainForm.buildMainCaption: string;
+var s  : string;
+begin
+  s := 'Test Software ' + lblTestSoftwareCap + '   IP = ' + edtIPAddress.Text + '   Device Port = ' + edtClientPort.Text;
+  Result := s;
+end;
+
+function TMainForm.encodeCommandData(CommandByte: byte): string;
+var
+   s       : string;
+   tmp     : integer;
+   cs      : byte;
+
+   DPtr    : pbyte;
+begin
+  s := '';
+  case CommandByte of
+//  C0Command          = 'Reset';      C0Request          = $90; // Reset Request
+//  C1Command          = 'Options';    C1Request          = $91; // Options Change Request
+//  C2Command          = 'Firmware';   C2Request          = $92; // Firmware information
+//  C3Command          = 'Displays';   C3Request          = $A0; // Display Request
+//  C4Command          = 'Indicator';  C4Request          = $A1; // Indicator/Annunciator Change Request
+//  C5Command          = 'Dimming';    C5Request          = $B0; // Dimming Change Request
+//  C6Command          = 'Status';     C6Request          = $D0; // Input Status Request
+    C0Request  : begin               // reset
+      C0RequestData[1] := CommandByte;
+      s        := chr(C0RequestData[1]);
+      inc(NumberOfRequests);
+      end;
+    C2Request  : begin               // firmware
+      C2RequestData[1] := CommandByte;
+      s        := chr(C2RequestData[1]);  // 01
+      inc(NumberOfRequests);
+    end;
+    C3Request : begin                 // Axes (9 bytes: cmd + 8 data)
+//    C4RequestData[2] := iNDICATORS;
+      C3RequestData[1] := CommandByte;
+      s        := chr(C3RequestData[1]);       // 01
+      s        := s + chr(C3RequestData[2]);
+      s        := s + chr(C3RequestData[3]);
+      s        := s + chr(C3RequestData[4]);
+      s        := s + chr(C3RequestData[5]);
+      s        := s + chr(C3RequestData[6]);
+      s        := s + chr(C3RequestData[7]);
+      s        := s + chr(C3RequestData[8]);
+      s        := s + chr(C3RequestData[9]);
+      inc(NumberOfRequests);
+      end;
+    C4Request : begin               // indicator command (F3) no longer used
+      // Intentionally disabled: brightness is controlled only by F4 dimming.
+      s        := '';
+      end;
+    C5Request : begin               // dimming (2 bytes: cmd + brightness)
+      C5RequestData[1] := CommandByte;
+      s        := chr(C5RequestData[1]);
+      s        := s + chr(C5RequestData[2]);   // brightness (0x00-0xFF)
+      inc(NumberOfRequests);
+      end;
+
+    else begin
+      s   := chr(CommandByte);
+    end;
+  end;
+  TXCount := 30;
+  Result  := s;
+end;
+
+
+procedure TMainForm.wrMemoWindow(show,memo,lbl :TObject; limit,place : integer;head,cap,s : string);
+var lsLineNum : string;
+    i         : integer;
+    cnt       : byte;
+    SMsg      : string;
+begin
+  if TCheckBox(show).Checked then
+    begin
+    cnt := length(s);
+    SMsg  := '';
+    for i := 1 to cnt do {Loop through the buffer and}
+      SMsg  := SMsg + IntToHex(ord(s[i]),2)+' '; {Convert the bytes to a pascal string}
+
+    if TRichEdit(memo).Lines.Count >= limit then TRichEdit(memo).Clear;
+    lsLineNum := head + IntToStr(TRichEdit(memo).Lines.Count) + ' -> ';
+
+    While length(lsLineNum) < (place + 7) do
+      Insert('0',lsLineNum,4);
+
+    TRichEdit(memo).Lines.Add(lsLineNum + SMsg);          {then store them in the RX Window }
+    TLabel(lbl).Caption := cap + IntToStr(TRichEdit(memo).Lines.Count);
+    end;
+end;
+
+procedure TMainForm.memoRxChange(Sender: TObject);
+begin
+  lblReceived.Caption := 'Lines Received : ' + IntToStr(memoRx.lines.count);
+end;
+
+procedure TMainForm.memoRxKeyPress(Sender: TObject; var Key: char);
+var UserrecieveString,CharacterCreationString,StringToRecieve : string;
+    CharacterPointer,CharacterToRecieve,Stringlength,BadCharPos : byte;
+begin
+  case Key of
+    '0'..'9':;
+    'A'..'F':;
+    'a'..'f':;
+    #8 :;
+    #13:begin
+        UserrecieveString := memoRx.Lines.Strings[memoRx.Lines.Count-1];
+        memoRx.Lines.Delete(memoRx.Lines.Count-1);
+        BadCharPos := pos('>',UserrecieveString);
+        if BadCharPos <> 0 then
+          begin
+          memoRx.Lines.Add(UserrecieveString);
+          Delete(UserrecieveString,1,BadCharPos+1);
+          end;
+        While pos(' ',UserrecieveString) <> 0 do
+          begin
+          BadCharPos := pos(' ',UserrecieveString);
+          Delete(UserrecieveString,BadCharPos,1);
+          end;//while
+        Stringlength := length(UserrecieveString);
+        CharacterPointer := 1;
+        StringToRecieve := '';
+        While CharacterPointer <= Stringlength do
+          begin
+          CharacterCreationString := '$' + UserrecieveString[CharacterPointer] + UserrecieveString[CharacterPointer+1];
+          CharacterToRecieve := StrToInt(CharacterCreationString);
+          StringToRecieve := StringToRecieve + Chr(CharacterToRecieve);
+          CharacterPointer := CharacterPointer + 2;
+          end;
+        if StringToRecieve <> '' then decodeRecievedData(StringToRecieve);
+        Key := #00;
+        end;
+    else Key := #00;
+  end;//case
+end;
+
+procedure TMainForm.memoTxChange(Sender: TObject);
+begin
+  lblTransmitted.Caption := 'Lines Transmitted : ' + IntToStr(memoTx.lines.count);
+end;
+
+procedure TMainForm.memoTxKeyPress(Sender: TObject; var Key: char);
+var UserTransmitString,CharacterCreationString,StringToTransmit : string;
+    CharacterPointer,CharacterToTransmit,Stringlength,BadCharPos : byte;
+begin
+ case Key of
+  '0'..'9':;
+  'A'..'F':;
+  'a'..'f':;
+  #8:;
+  #13:begin
+      UserTransmitString := memoTx.Lines.Strings[memoTx.Lines.Count-1];
+      memoTx.Lines.Delete(memoTx.Lines.Count-1);
+      BadCharPos := pos('>',UserTransmitString);
+      if BadCharPos <> 0 then
+       begin
+       memoTx.Lines.Add(UserTransmitString);
+       Delete(UserTransmitString,1,BadCharPos+1);
+       end;
+      While pos(' ',UserTransmitString) <> 0 do
+       begin
+       BadCharPos := pos(' ',UserTransmitString);
+       Delete(UserTransmitString,BadCharPos,1);
+       end;//while
+      Stringlength := length(UserTransmitString);
+      CharacterPointer := 1;
+      StringToTransmit := '';
+      While CharacterPointer <= Stringlength do
+       begin
+       CharacterCreationString := '$' + UserTransmitString[CharacterPointer] + UserTransmitString[CharacterPointer+1];
+       CharacterToTransmit := StrToInt(CharacterCreationString);
+       StringToTransmit := StringToTransmit + Chr(CharacterToTransmit);
+       CharacterPointer := CharacterPointer + 2;
+       end;
+      if StringToTransmit <> '' then cpOutputData(StringToTransmit, False);
+      if cbxResponse.Checked then
+        begin
+        inc(NumberOfRequests);
+        end;
+      Key := #00;
+      end;
+  else Key := #00;
+  end;//case
+end;
+
+procedure TMainForm.cpOutputData(s: string; rc: boolean);
+var
+   i         : integer;
+   count     : byte;
+   SMsg      : string;
+   lsLineNum : string;
+begin
+  if s <> '' then
+    begin
+    IdUDPClient1.Host := edtIPAddress.Text;
+    IdUDPClient1.Send(s);
+//    TXCount := 30;
+
+    end;
+  wrMemoWindow(cbxTRXWindowEnable,memoTx,lblTransmitted,TxWinLimit,TxPlace,'TX ','Lines Transmitted : ',s);
+end;
+
+
+
+procedure TMainForm.tkbC2UpdateRateChange(Sender: TObject);
+begin
+  lblC2TransmitRate.Caption := IntToStr(tkbC2UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC3UpdateRateChange(Sender: TObject);
+begin
+  lblC3TransmitRate.Caption := IntToStr(tkbC3UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC4UpdateRateChange(Sender: TObject);
+begin
+  lblC4TransmitRate.Caption := IntToStr(tkbC4UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC5UpdateRateChange(Sender: TObject);
+begin
+  // tkbC5UpdateRate is now the brightness dimming control (0-255)
+  if tkbC5UpdateRate.Position < 0 then tkbC5UpdateRate.Position := 0;
+  if tkbC5UpdateRate.Position > 255 then tkbC5UpdateRate.Position := 255;
+  CurrentIndicatorBrightness := byte(tkbC5UpdateRate.Position);
+  C5RequestData[2] := CurrentIndicatorBrightness;
+  lblC5TransmitRate.Caption := 'Dimming = ' + IntToStr(CurrentIndicatorBrightness);
+  applyIndicatorDimming(CurrentIndicatorBrightness);
+  // Avoid a startup/reset side-effect transmit when code sets defaults.
+  if not resetbit then
+    fC5Request := True;
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbC6UpdateRateChange(Sender: TObject);
+begin
+  lblC6TransmitRate.Caption := IntToStr(tkbC6UpdateRate.Position);
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkbRecieveTimeOutChange(Sender: TObject);
+begin
+  lblRecievedTimeout.Caption := 'Recieve Timeout = ' + IntToStr(tkbRecieveTimeOut.Position);
+end;
+
+procedure TMainForm.tkbScrollRateChange(Sender: TObject);
+begin
+ if tkbScrollRate.Position < tbUpdateRate.Position then
+   tbUpdateRate.Position := tkbScrollRate.Position;
+ lblScrollRate.caption   := 'Scroll Rate Value: ' + InttoStr(tkbScrollRate.Position);
+end;
+
+procedure TMainForm.updateAxisControl(TrackBar: TTrackBar; ValueEdit: TEdit; OffsetLabel: TLabel;
+                                      BasePosition: Integer; DataLowIndex: Integer);
+var
+  value : word;
+begin
+  value := word(TrackBar.Position);
+  ValueEdit.Text := IntToStr(value);
+  OffsetLabel.Caption := 'offset= ' + IntToStr(integer(value) - BasePosition);
+  C3RequestData[DataLowIndex] := value and $003F;
+  C3RequestData[DataLowIndex + 1] := (value and $0FC0) shr 6;
+end;
+
+procedure TMainForm.tkb_CabinAltChange(Sender: TObject);
+begin
+
+
+  if oldSlider <> tkb_CabinAlt.Position then
+  begin
+    if statusFlg = false then
+    begin
+      updateAxisControl(tkb_CabinAlt, edt_Dial, Cos_cabAlt, 2048, 2);
+
+        // Dimming: use C5 trackbar position as brightness level (0-255)
+        CurrentIndicatorBrightness := byte(tkbC5UpdateRate.Position);
+        C5RequestData[2] := CurrentIndicatorBrightness;
+
+  if resetbit <> True then fC3Request := true;
+
+    end
+    else
+    begin
+      statusFlg := false;
+    end;
+    ScrollDial := tkb_CabinAlt.Position;
+    fC1Request := true;
+    oldSlider := tkb_CabinAlt.Position;
+    end;
+
+end;
+
+procedure TMainForm.tkb_RudPosChange(Sender: TObject);
+begin
+  updateAxisControl(tkb_RudPos, edt_Rud, Label2, 2048, 4);
+  if not resetbit then fC3Request := True;
+  fC1Request := True;
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkb_ElevPosChange(Sender: TObject);
+begin
+  updateAxisControl(tkb_ElevPos, edt_Elev, Label3, 1024, 6);
+  if not resetbit then fC3Request := True;
+  fC1Request := True;
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.tkb_FlapPosChange(Sender: TObject);
+begin
+  updateAxisControl(tkb_FlapPos, edt_Flap, Label6, 0, 8);
+  if not resetbit then fC3Request := True;
+  fC1Request := True;
+  fImageRedraw := True;
+end;
+
+procedure TMainForm.Cut1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      CutToClipBoard;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Copy1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      CopyToClipboard;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Paste1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      PasteFromClipboard;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Delete1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      ClearSelection;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Selectall1Click(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      SelectAll;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.pmClearAllClick(Sender: TObject);
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      Clear;
+    Except
+      Beep;
+    End;
+   end;
+end;
+
+procedure TMainForm.Print1Click(Sender: TObject);
+var s : string;
+begin
+  with TRichEdit(Sender) do
+   begin
+    Try
+      s                           := Name;
+      Print(s + ' Contents');
+    Except
+      on EInOutError do
+        begin
+        MessageDlg('Error Printing Text',mtError,[mbOk],0);
+        Beep;
+        end;
+    End;
+   end;
+end;
+
+procedure TMainForm.cbxResponseClick(Sender: TObject);
+begin
+  lblResponseRequestsTitle1.Visible := cbxResponse.Checked;
+  lblRequestsSent.Visible           := cbxResponse.Checked;
+  lblResponseRequestsTitle2.Visible := cbxResponse.Checked;
+  lblResponseRecieved.Visible       := cbxResponse.Checked;
+  lblRecievedTimeout.Visible        := cbxResponse.Checked;
+  tkbRecieveTimeOut.Visible         := cbxResponse.Checked;
+  N1.Visible                        := cbxResponse.Checked;
+  mm02s03.Visible                   := cbxResponse.Checked;
+  NumberOfRequests                  :=   0;
+  NumberOfResponse                  :=   0;
+end;
+
+procedure TMainForm.ScrollBar2Change(Sender: TObject);
+//r ofset : integer;
+begin
+    lblTransmitRate.Top           :=  10 - ScrollBar2.Position;
+    tbUpdateRate.Top              :=  22 - ScrollBar2.Position;
+
+    lblC2TransmitRate.Top         :=  94 - ScrollBar2.Position;
+    tkbC2UpdateRate.Top           := 106 - ScrollBar2.Position;
+    lblC3TransmitRate.Top         := 136 - ScrollBar2.Position;
+    tkbC3UpdateRate.Top           := 148 - ScrollBar2.Position;
+    lblC4TransmitRate.Top         := 178 - ScrollBar2.Position;
+    tkbC4UpdateRate.Top           := 190 - ScrollBar2.Position;
+    lblC5TransmitRate.Top         := 220 - ScrollBar2.Position;
+    tkbC5UpdateRate.Top           := 232 - ScrollBar2.Position;
+    lblC6TransmitRate.Top         := 262 - ScrollBar2.Position;
+    tkbC6UpdateRate.Top           := 270 - ScrollBar2.Position;
+    cbxTRXWindowEnable.Top        := 310 - ScrollBar2.Position;
+    cbxRDXWindowEnable.Top        := 330 - ScrollBar2.Position;
+    cbxGraphicsEnable.Top         := 350 - ScrollBar2.Position;
+    cbxResponse.Top               := 370 - ScrollBar2.Position;
+    lblResponseRequestsTitle1.Top := 390 - ScrollBar2.Position;
+    lblRequestsSent.Top           := 390 - ScrollBar2.Position;
+    lblResponseRequestsTitle2.Top := 410 - ScrollBar2.Position;
+    lblResponseRecieved.Top       := 410 - ScrollBar2.Position;
+    lblRecievedTimeout.Top        := 430 - ScrollBar2.Position;
+    tkbRecieveTimeOut.Top         := 430 - ScrollBar2.Position;
+//  if cbxResponse.Checked then   ofset :=  60
+//  else                          ofset :=   0;
+//    lblPot2TrapZero.caption       := IntToStr(ScrollBar2.Position);
+end;
+
+procedure TMainForm.edtClientPortKeyPress(Sender: TObject; var Key: char);
+var port      : integer;
+    SimtekIni : TIniFile;
+begin
+ case Key of
+  '0'..'9':;
+  #8:;
+  #13:begin
+      port                        := StrToInt(edtClientPort.Text);
+      IdUDPClient1.Port           := port;
+      with TEdit(Sender) do
+        begin
+        SimtekIni                 := TIniFile.Create('C:\Simtek.Ini');
+        with SimtekIni do begin   WriteString(InstSec, InstSecK02, edtClientPort.Text); end; {Set the default flags for startup          }
+        SimtekIni.Free;
+        end;//with TEdit
+      MainForm.Caption            := buildMainCaption;       //
+      end//case #13
+  else Key := #00;
+  end;//case
+end;
+
+procedure TMainForm.edtIPAddressKeyPress(Sender: TObject; var Key: char);
+var SimtekIni : TIniFile;
+begin
+  case key of
+   '0'..'9':;
+   '.':;
+  #8:;
+  #13:begin
+      with TEdit(Sender) do
+        begin
+        SimtekIni                 := TIniFile.Create('C:\Simtek.Ini');
+        with SimtekIni do begin   WriteString(InstSec, InstSecK01, edtIPAddress.Text); end; {Set the default flags for startup          }
+        SimtekIni.Free;
+        end;// with
+      MainForm.Caption            := buildMainCaption;       //
+      end//case #13
+   else Key := #00;
+   end;
+end;
+
+procedure TMainForm.edt_DialClick(Sender: TObject);
+begin
+   TEdit(Sender).Selectall;
+
+end;
+
+procedure TMainForm.edt_DialKeyPress(Sender: TObject; var Key: Char);
+var
+  targetTrackBar : TTrackBar;
+  enteredValue   : Integer;
+begin
+  case key of
+   '0'..'9':;
+   '.':;
+  #8:;
+  #13:begin
+        targetTrackBar := tkb_CabinAlt;
+        if Sender = edt_Rud then
+          targetTrackBar := tkb_RudPos
+        else if Sender = edt_Elev then
+          targetTrackBar := tkb_ElevPos
+        else if Sender = edt_Flap then
+          targetTrackBar := tkb_FlapPos;
+
+        if TryStrToInt(TEdit(Sender).Text, enteredValue) then
+        begin
+          if enteredValue < targetTrackBar.Min then enteredValue := targetTrackBar.Min;
+          if enteredValue > targetTrackBar.Max then enteredValue := targetTrackBar.Max;
+
+          if targetTrackBar = tkb_CabinAlt then
+            statusFlg := True;
+
+          targetTrackBar.Position := enteredValue;
+          TEdit(Sender).Text := IntToStr(enteredValue);
+        end;
+        ActiveControl := pnlDevice;
+      end//case #13
+   else Key := #00;
+   end;
+
+end;
+
+procedure TMainForm.mm01s01Click(Sender: TObject);
+begin
+  Close;
+end;
+
+procedure TMainForm.mm02s01Click(Sender: TObject);
+begin
+  MemoRx.Clear;                              // blank the window
+end;
+
+procedure TMainForm.mm02s02Click(Sender: TObject);
+begin
+  MemoTx.Clear;                              // blank the window
+end;
+
+procedure TMainForm.mm02s03Click(Sender: TObject);
+begin
+  NumberOfRequests                := 0;
+  NumberOfResponse                := 0;
+end;
+
+procedure TMainForm.mm03s01Click(Sender: TObject);
+var i : byte;
+begin
+  mm03s02.Checked           := mm03s01.Checked;
+  mm03s01.Checked           := not mm03s01.Checked;
+  gRate.ui                  := 0;
+  gRate.s                   := '';
+  gRate.ai                  := 0;
+  gRate.us                  := 0;
+  for i := 0 to 255 do
+    gRate.ar[i]             := 0;
+  gRate.ui                  := 0;
+  gRate.uc                  := 0;
+  gRateC1                   := gRate;
+  gRateC2                   := gRate;
+  gRateC3                   := gRate;
+  gRateC4                   := gRate;
+end;
+
+procedure TMainForm.mm03s03Click(Sender: TObject);
+begin
+  mm03s03.Checked                 := mm03s04.Checked;
+  mm03s04.Checked                 := not mm03s04.Checked;
+end;
+
+procedure TMainForm.mm03s05s00Click(Sender: TObject);
+begin
+  TMenuItem(Sender).Checked       := not TMenuItem(Sender).Checked;
+end;
+
+procedure TMainForm.mm05Click(Sender: TObject);
+begin
+  mm05.Checked        := not mm05.Checked;
+  fScrollReq          := mm05.Checked;
+  dScrollValue        := 0;
+  ScrollCount         := ScrollCount;
+  fImageRedraw        := True;
+end;
+
+procedure TMainForm.mm06Click(Sender: TObject);
+begin
+  responsereset;
+  fC0Request                      := True;
+  // Apply reset defaults to the device: dimming only (F4).
+  fC5Request                      := True;
+  resetbit := True;
+end;
+
+
+procedure TMainForm.mm08Click(Sender: TObject);
+begin
+  fC2Request                      := True;
+end;
+
+procedure TMainForm.mm09Click(Sender: TObject);
+begin
+  fC3Request                      := True;
+end;
+
+
+
+
+procedure TMainForm.responseReset;
+begin
+    resetbit := True;
+    memoTx.Clear;                              // Blank the dataout and datain
+    memoRx.Clear;                              // Blank the dataout and datain
+
+    mm06.Caption                     := '&'+C0Command;
+
+    mm08.Caption                     := C2Command;
+    mm09.Caption                     := C3Command;
+    mm03s05s02.Caption               := '&'+C2Command;
+    mm03s05s03.Caption               := '&'+C3Command;
+    mm03s05s04.Caption               := '&(F3 unused)';
+    mm03s05s05.Caption               := '&'+C5Command;
+
+
+    lblFirmwareValue1.Caption        := C2DeviceValDefault;
+    lblFirmwareValue2.Caption        := C2DeviceValDefault;
+
+    MainForm.Caption                 := buildMainCaption;       //
+    lblTransmitRate.Caption          := TSCapHeader + '0.00Hz';
+    lblC2TransmitRate.Caption        := C2CapHeader + '0.00Hz';
+    lblC3TransmitRate.Caption        := C3CapHeader + '0.00Hz';
+
+
+
+    lblTestSoftwarePNValue.Caption   := lblTestSoftwareCap;
+    lblTestSoftwareRevValue.Caption  := lblTestSoftwareRev;
+    lblWARNING.Caption               := lblWARNINGCaption;
+
+    tkb_RudPos.Position := 0;
+    tkb_CabinAlt.Position  := 2048;
+    tkb_RudPos.Position    := 2048;
+    tkb_ElevPos.Position   := 1024;
+    tkb_FlapPos.Position   := 0;
+
+    updateAxisControl(tkb_CabinAlt, edt_Dial, Cos_cabAlt, 2048, 2);
+    updateAxisControl(tkb_RudPos, edt_Rud, Label2, 2048, 4);
+    updateAxisControl(tkb_ElevPos, edt_Elev, Label3, 1024, 6);
+    updateAxisControl(tkb_FlapPos, edt_Flap, Label6, 0, 8);
+
+    C5RequestData[2] := 0;
+    CurrentIndicatorBrightness := 0;
+    tkbC5UpdateRate.Min := 0;
+    tkbC5UpdateRate.Max := 255;
+    tkbC5UpdateRate.Frequency := 1;
+    tkbC5UpdateRate.LineSize := 1;
+    tkbC5UpdateRate.Position := 0;
+    tkbC5UpdateRate.Visible := True;   // Show brightness trackbar
+    lblC5TransmitRate.Caption := 'Dimming = ' + IntToStr(CurrentIndicatorBrightness);
+    tkbDimming1Old := 0;
+    applyIndicatorDimming(CurrentIndicatorBrightness);
+
+    ScrollDial := 2048;
+    ScrollDir := True;
+    lblScrollRate.caption   := 'Scroll Rate Value: ' + InttoStr(tkbScrollRate.Position);
+
+    fImageRedraw:= True;
+//    ActiveControl                    := UserImage;
+    resetbit := False;
+end;
+
+
+procedure TMainForm.responseFirmware(s : string);
+var
+  si    : string;
+  b1,b2 : byte;
+begin
+    inc(NumberOfResponse);
+    b2 := Ord(s[2]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := ': ' + chr(b1) + chr(b2) + '-';
+    b2 := Ord(s[3]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2);
+    b2 := Ord(s[4]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2) + ' rev ';
+    si := si + s[5];
+    lblFirmwareValue1.Caption := si;
+    b2 := Ord(s[6]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := ': ' + chr(b1) + chr(b2) + '-';
+    b2 := Ord(s[7]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2);
+    b2 := Ord(s[8]);
+    b1 := ((b2 shr 4) and $0F) or $30;
+    b2 := (b2 and $0F) or $30;
+    si := si + chr(b1) + chr(b2) + ' rev ';
+    si := si + s[9];
+    lblFirmwareValue2.Caption := si;
+end;
+
+procedure TMainForm.memoRevisionEnter(Sender: TObject);
+begin
+  memoRevision.Height            := 290;
+end;
+
+
+procedure TMainForm.memoRevisionExit(Sender: TObject);
+begin
+  memoRevision.Height     := 38;
+  ActiveControl           := nil;
+end;
+
+procedure TMainForm.memoRevisionMouseLeave(Sender: TObject);
+begin
+  memoRevision.Height     := 38;
+  ActiveControl           := nil;
+end;
+
+procedure TMainForm.PopupMenu1Popup(Sender: TObject);
+var   ln,ch : integer;
+const copy   = 0;
+      cut    = 1;
+      paste  = 2;
+      delete = 3;
+      select = 5;
+      clear  = 7;
+      print  = 9;
+begin
+  ln        := 0;
+  ch        := 0;
+  if PopupMenu1.PopupComponent = memoTx then
+   begin
+   ln       := memoTx.Sellength;
+   ch       := length(memoTx.Text);
+   end
+  else if PopupMenu1.PopupComponent = memoRx then
+   begin
+   ln       := memoRx.Sellength;
+   ch       := length(memoRx.Text);
+   end
+  else
+   Beep;
+  if ln > 0 then
+   begin
+   PopUpMenu1.Items[copy].Enabled   := True;
+   PopUpMenu1.Items[cut].Enabled    := True;
+   PopUpMenu1.Items[delete].Enabled := True;
+   end
+  else
+   begin
+   PopUpMenu1.Items[copy].Enabled   := False;
+   PopUpMenu1.Items[cut].Enabled    := False;
+   PopUpMenu1.Items[delete].Enabled := False;
+   end;
+  if ch <> 0 then
+   begin
+   PopUpMenu1.Items[select].Enabled := True;
+   PopUpMenu1.Items[clear].Enabled  := True;
+   PopUpMenu1.Items[print].Enabled  := True;
+   end
+  else
+   begin
+   PopUpMenu1.Items[select].Enabled := False;
+   PopUpMenu1.Items[clear].Enabled  := False;
+   PopUpMenu1.Items[print].Enabled  := False;
+   end;
+end;
+
+procedure TMainForm.tbUpdateRateChange(Sender: TObject);
+begin
+ if tbUpdateRate.Position = 0 then DXTimer1.Interval := 0 else DXTimer1.Interval := 1;
+ if tkbScrollRate.Position < tbUpdateRate.Position then
+   tkbScrollRate.Position := tbUpdateRate.Position;
+end;
+
+
+function TMainForm.calculateRate(ct : double;g : Tx;rc : boolean;l : TObject;t : TObject; s : string):Tx;
+var
+   i   : integer;
+   cus : double; // current update speed
+   cuh : double; // current update Hz
+   cua : double; // current update average
+begin
+  if (g.us <> 0) and rc then
+    begin
+    cus := (ct - g.us) * 86400;
+    if cus <> 0 then
+      begin
+      g.ar[g.ai] := cus;
+      inc(g.ai);
+      if g.ui < 255 then Inc(g.ui);
+      cua := 0;
+      for i := 0 to (g.ui - 1) do
+        begin  cua := cua + g.ar[i];    end;
+      cus := cua / g.ui;
+      cuh := RoundTo((1 / cus),-2);
+      g.s := FloatToStr(cuh) +'Hz';
+      g.us := ct;
+      end;//if cus <> 0 then
+    end// if g.us <> 0 then
+  else if rc then
+    begin
+    g.us := ct;
+    g.ai := 0;
+    end;//else if g.us <> 0 then
+  TLabel(l).Caption := s + g.s + ' ' +  IntToStr(TTrackBar(t).Position);
+  Result := g;
+end;
+
+procedure TMainForm.DXTimer1Timer(Sender: TObject; LagCount: Integer);
+var  rxtimeout : integer;                 // timeout time for attempt to read receive buffer
+     wdlist    : array[0..10] of string;  //
+     wrstr     : string;                  // string to write to transmit buffer
+     li        : integer;                 // line index
+     counter   : integer;                 //
+     ratecalc  : boolean;                 //
+     ctime     : double;                  //
+begin
+  rxtimeout                   := tkbRecieveTimeOut.Position;
+  wrstr                       := '';
+  lblRequestsSent.Caption     := ': ' + IntToStr(NumberOfRequests);
+  lblResponseRecieved.Caption := ': ' + IntToStr(NumberOfResponse);
+
+  if NumberOfRequests > NumberOfResponse then
+    begin
+    wrstr     := IdUDPClient1.ReceiveString(rxtimeout);
+    if wrstr <> '' then decodeRecievedData(wrstr);
+    RXCount    := 30;
+    end;// if NumberOfRequests > NumberOfResponse then
+  if fScrollReq then
+    begin
+    if ScrollCount > tkbScrollRate.Position then
+      begin
+         scrollEverything();
+      if dScrollValue > 57 then dScrollValue := 1;
+      fImageRedraw    := True;
+      ScrollCount     := 255;
+      inc(dScrollValue);
+      end;
+      inc(ScrollCount);
+    end;
+  wrstr           := '';
+  mm03s05.Checked := mm03s05s01.Checked
+                  or mm03s05s02.Checked
+                  or mm03s05s03.Checked
+                  or mm03s05s04.Checked
+                  or mm03s05s05.Checked
+                  or mm03s05s06.Checked;
+  inc(gRate.uc);
+
+  if gRateC2.uc >= (tkbC2UpdateRate.Position) then
+    begin
+    if mm03s05.Checked and mm03s02.Checked then
+      begin      if mm03s05s02.Checked then fC2Request := True;   end;
+    gRateC2.uc := 0;
+    end; //if gRateC2.uc >= (tkbC2UpdateRate.Position)then
+
+  if gRateC3.uc >= (tkbC3UpdateRate.Position) then
+    begin
+    if mm03s05.Checked and mm03s02.Checked then
+      begin      if mm03s05s03.Checked then fC3Request := True;   end;
+    gRateC3.uc := 0;
+    end; //if gRateC3.uc >= (tkbC3UpdateRate.Position)then
+
+  // F3 indicator command path disabled.
+  if gRateC4.uc >= (tkbC4UpdateRate.Position) then
+    gRateC4.uc := 0;
+
+  if gRateC5.uc >= (tkbC5UpdateRate.Position) then
+    begin
+    if mm03s05.Checked and mm03s02.Checked then
+      begin      if mm03s05s05.Checked then fC5Request := True;   end;
+    gRateC5.uc := 0;
+    end; //if gRateC5.uc >= (tkbC5UpdateRate.Position)then
+
+  ctime           := Now;
+  li              := 0;
+
+  if fC0Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C0Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    fC0Request    := False;
+    end;// if fC0Request
+
+
+
+  if fC2Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C2Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    gRateC2 := calculateRate(ctime, gRateC2, True, lblC2TransmitRate, tkbC2UpdateRate, C2CapHeader);
+    fC2Request    := False;
+    end;// if fC2Request
+
+  if fC3Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C3Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    gRateC3 := calculateRate(ctime, gRateC3, True, lblC3TransmitRate, tkbC3UpdateRate, C3CapHeader);
+    fC3Request    := False;
+    end;// if fC3Request
+
+  // F3 indicator command transmit path disabled.
+  fC4Request      := False;
+
+  if fC5Request then
+    begin
+    wrstr         := wrstr + encodeCommandData(C5Request);
+    if mm03s04.Checked then
+      begin
+      inc(li);
+      wdlist[li]  := wrstr;
+      wrstr       := '';
+      end;// mm03s04.Checked
+    applyIndicatorDimming(CurrentIndicatorBrightness);
+    fC5Request    := False;
+    end;// if fC5Request
+
+
+  if mm03s03.Checked and (wrstr <> '') then
+    begin
+    inc(li);
+    wdlist[li]    := wrstr;
+    wrstr         := '';
+    end;//if mm03s01.Checked
+
+  if gRate.uc >= (tbUpdateRate.Position) then
+    begin
+    if mm03s02.Checked then gRate := calculateRate(ctime,    gRate, True, lblTransmitRate, tbUpdateRate, TSCapHeader)
+    else                    gRate := calculateRate(gRate.uc, gRate, True, lblTransmitRate, tbUpdateRate, TSCapHeader);
+
+    if li <> 0 then
+      begin
+      for counter  := 1 to li do
+        begin
+        wrstr           := wdlist[counter];
+        wdlist[counter] := '';
+        if counter       = li then ratecalc := True else  ratecalc := False;
+        cpOutputData(wrstr, ratecalc);
+        end;//for counter := 1 to li do
+      end;//if li <> 0 then
+    gRate.uc := 0;
+    inc(gRateC1.uc);
+    inc(gRateC2.uc);
+    inc(gRateC3.uc);
+    inc(gRateC4.uc);
+    inc(gRateC5.uc);
+    inc(gRateC6.uc);
+    end;//if gRate.uc >= (tbUpdateRate.Position) then
+
+  if (fImageRedraw and cbxGraphicsEnable.Checked) then
+    begin
+    paintGUI;
+    end;
+
+  if TXCount > 1 then
+  Dec(TXCount);
+  if TXCount = 1 then
+    begin
+    TXCount := 0;
+    end;
+
+  if RXCount > 1 then Dec(RXCount);
+  if RXCount = 1 then
+    begin
+    RXCount := 0;
+    end;
+end;
+
+procedure TMainForm.decodeRecievedData(s: string);
+var
+  SMsg      : string;
+  lsLineNum : string;
+  i         : integer;
+  tiltValue : word;
+  count     : byte;
+  cal,giv   : byte;
+  DPtr      : pbyte;
+  SPtr      : pbyte;
+begin
+  if length(s) <> 0 then
+    begin
+    i := 1;
+    while i <= length(s) do
+      begin
+      case Ord(s[i]) of
+        C0Response : begin  // reset to level point
+          tiltValue := 2048;
+          resetbit := True;
+          tkb_CabinAlt.Position := tiltValue;
+          tkb_RudPos.Position := 2048;
+          tkb_ElevPos.Position := 1024;
+          tkb_FlapPos.Position := 0;
+          updateAxisControl(tkb_CabinAlt, edt_Dial, Cos_cabAlt, 2048, 2);
+          updateAxisControl(tkb_RudPos, edt_Rud, Label2, 2048, 4);
+          updateAxisControl(tkb_ElevPos, edt_Elev, Label3, 1024, 6);
+          updateAxisControl(tkb_FlapPos, edt_Flap, Label6, 0, 8);
+          ScrollDial := tiltValue;
+          // Reset dimming default on reset response.
+          CurrentIndicatorBrightness := 0;
+          C5RequestData[2] := CurrentIndicatorBrightness;
+          tkbC5UpdateRate.Position := CurrentIndicatorBrightness;
+          lblC5TransmitRate.Caption := 'Dimming = ' + IntToStr(CurrentIndicatorBrightness);
+          applyIndicatorDimming(CurrentIndicatorBrightness);
+          resetbit := False;
+          fImageRedraw := True;
+          i := i + 1;
+          end;
+//  C2Response  = C2Request;   C2Responselength  = 9;  // program response
+        C2Response : begin  // program revision
+          SPtr     := Addr(s[i]);
+          DPtr     := Addr(C2ResponseData[1]);
+          CopyMemory(DPtr, SPtr, C2Responselength);
+          inc(NumberOfResponse);
+          responseFirmware(s);
+          i        := i + C2Responselength;
+          fImageRedraw := True;
+          end;//case = C2Response
+        C4Response : begin  // indicator status (F3) no longer used
+          // Ignore F3 command + one payload byte.
+          i := i + 2;
+          end;  // C4Response
+        C5Response : begin  // dimming response (F4 + brightness)
+          if length(s) > i then
+          begin
+            C5ResponseData[1] := Ord(s[i]);
+            inc(i);
+            if i <= length(s) then
+            begin
+              CurrentIndicatorBrightness := Ord(s[i]);  // brightness 0x00-0xFF
+              C5ResponseData[2] := CurrentIndicatorBrightness;
+              C5RequestData[2] := CurrentIndicatorBrightness;
+              tkbC5UpdateRate.Position := CurrentIndicatorBrightness;
+              lblC5TransmitRate.Caption := 'Dimming = ' + IntToStr(CurrentIndicatorBrightness);
+            end;
+            applyIndicatorDimming(CurrentIndicatorBrightness);
+            inc(NumberOfResponse);
+            fImageRedraw := True;
+          end;
+          i := i + 1;
+          end;  // C5Response
+        else
+          begin
+          i          := i + 1;
+          end;
+        end;// case Ord(s[i]) of
+      end;// while i <= length(s) do
+    end;// if length(s) <> 0 then
+  wrMemoWindow(cbxRDXWindowEnable,memoRx,lblReceived,RxWinLimit,RxPlace,'RX ','Lines Received : ',s);
+end;
+
+procedure TMainForm.updateIndicator;
+begin
+  // Indicator command removed; brightness is controlled only by dimming.
+  applyIndicatorDimming(CurrentIndicatorBrightness);
+end;
+
+procedure TMainForm.applyIndicatorDimming(Level : byte);
+var
+  f     : double;
+  r,g,b : byte;
+begin
+  if Level = 0 then
+  begin
+  
+    lbl_Aileron.Font.Color := clBlack;
+    lbl_Rudder.Font.Color := clBlack;
+    lbl_Elevator.Font.Color := clBlack;
+    lbl_Flaps.Font.Color := clBlack;
+    end
+  else
+  begin
+    f := Level / 255.0;
+    r := Round(GetRValue(ColorToRGB(clActive)) * f);
+    g := Round(GetGValue(ColorToRGB(clActive)) * f);
+    b := Round(GetBValue(ColorToRGB(clActive)) * f);
+    lbl_Aileron.Font.Color := RGB(r, g, b);
+    lbl_Rudder.Font.Color := RGB(r, g, b);
+    lbl_Elevator.Font.Color := RGB(r, g, b);
+    lbl_Flaps.Font.Color := RGB(r, g, b);
+  end;
+end;
+
+procedure TMainForm.paintGUI;
+begin
+  fImageRedraw := False;
+  lblC3TransmitRate.top := 55;
+  tkbC3UpdateRate.top   := 67;
+
+
+end;
+
+
+procedure TMainForm.lblFirmwareTitle1Click(Sender: TObject);
+begin
+  lblFirmwareValue1.Caption := C2DeviceValDefault;
+  lblFirmwareValue2.Caption := C2DeviceValDefault;
+end;
+
+
+procedure TMainForm.scrollEverything();
+begin
+
+  tkb_RudPos.Position := scrollDial;
+  tkb_CabinAlt.Position  := scrollDial;
+
+  if ScrollDir then ScrollDial  := ScrollDial + 5
+  else ScrollDial := ScrollDial - 5;
+
+  if ScrollDial >= 4095 then ScrollDir := False
+  else if ScrollDial <= 0 then ScrollDir := True;
+
+
+end;
+
+end.
