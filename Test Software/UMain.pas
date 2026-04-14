@@ -772,21 +772,13 @@ begin
 
   if oldSlider <> tkb_CabinAlt.Position then
   begin
-    if statusFlg = false then
-    begin
       updateAxisControl(tkb_CabinAlt, edt_Dial, Cos_cabAlt, 2048, 2);
 
-        // Dimming: use C5 trackbar position as brightness level (0-255)
-        CurrentIndicatorBrightness := byte(tkbC5UpdateRate.Position);
-        C5RequestData[2] := CurrentIndicatorBrightness;
+      // Dimming: use C5 trackbar position as brightness level (0-255)
+      CurrentIndicatorBrightness := byte(tkbC5UpdateRate.Position);
+      C5RequestData[2] := CurrentIndicatorBrightness;
 
-  if resetbit <> True then fC3Request := true;
-
-    end
-    else
-    begin
-      statusFlg := false;
-    end;
+      if resetbit <> True then fC3Request := true;
     ScrollDial := tkb_CabinAlt.Position;
     fC1Request := true;
     oldSlider := tkb_CabinAlt.Position;
@@ -1023,9 +1015,6 @@ begin
         begin
           if enteredValue < targetTrackBar.Min then enteredValue := targetTrackBar.Min;
           if enteredValue > targetTrackBar.Max then enteredValue := targetTrackBar.Max;
-
-          if targetTrackBar = tkb_CabinAlt then
-            statusFlg := True;
 
           targetTrackBar.Position := enteredValue;
           TEdit(Sender).Text := IntToStr(enteredValue);
