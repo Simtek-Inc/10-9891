@@ -271,7 +271,6 @@ type
     procedure memoRxKeyPress(Sender: TObject; var Key: char);
 
     procedure tbUpdateRateChange(Sender: TObject);
-    procedure lblFirmwareTitle1Click(Sender: TObject);
     procedure edtClientPortKeyPress(Sender: TObject; var Key: char);
     procedure edtIPAddressKeyPress(Sender: TObject; var Key: char);
     procedure tkbScrollRateChange(Sender: TObject);
@@ -1617,18 +1616,13 @@ begin
 end;
 
 
-procedure TMainForm.lblFirmwareTitle1Click(Sender: TObject);
-begin
-  lblFirmwareValue1.Caption := C2DeviceValDefault;
-  lblFirmwareValue2.Caption := C2DeviceValDefault;
-end;
-
-
 procedure TMainForm.scrollEverything();
 begin
 
-  tkb_RudPos.Position := scrollDial;
-  tkb_CabinAlt.Position  := scrollDial;
+  tkb_RudPos.Position   := scrollDial;
+  tkb_CabinAlt.Position := scrollDial;
+  tkb_ElevPos.Position  := scrollDial;
+  tkb_FlapPos.Position  := scrollDial;
 
   if ScrollDir then ScrollDial  := ScrollDial + 5
   else ScrollDial := ScrollDial - 5;
